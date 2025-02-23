@@ -88,21 +88,7 @@ class CustomCashInOutTableResource extends Resource
                 return date('Y-m-d', $timestamp);
             });
 
-        // Ambil data Makassar BB
-        $makassarDetails = mCashInOut::where('type', 'BB_MAKASSAR')
-            ->whereBetween('waktu', [$startDate, $endDate])
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'tanggal' => $item->waktu->format('Y-m-d'),
-                    'nilai' => $item->nilai
-                ];
-            });
-
         $data = [];
-        $totalPenjualan = 0;
-        $totalBBaku = 0;
-        $totalPeralatan = 0;
         foreach ($dates as $date) {
             $data[] = (object) [
                 'tanggal' => $date,
@@ -133,7 +119,6 @@ class CustomCashInOutTableResource extends Resource
                                 'COMPLIMENT',
                                 'BPJS'
                             ], $date),
-                'makassar_details' => $makassarDetails->where('tanggal', $date)->values()->toArray()
             ];
         }
         return $data;

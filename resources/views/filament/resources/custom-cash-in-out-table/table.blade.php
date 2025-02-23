@@ -88,7 +88,7 @@
         <tbody>
             <tr>
                 <th class="p-2 border text-left">Penjualan</th>
-                <th class="p-2 border text-left">{{ 'Rp ' . number_format($totald['total_penjualan'], 0, ',', '.') }}</th>
+                <th class="p-2 border text-left"style="background-color: #cccf15;">{{ 'Rp ' . number_format($totald['total_penjualan'], 0, ',', '.') }}</th>
             </tr>
             <tr>
                 <td class="p-2 border">Pajak</td>
@@ -100,7 +100,7 @@
             </tr>
             <tr>
                 <td class="p-2 border">Pengeluaran Bahan Baku Makassar</td>
-                <td class="p-2 border cursor-pointer hover:bg-yellow-300"
+                <td class="p-2 border cursor-pointer hover:bg-gray-100"
                     x-on:click="$dispatch('open-modal', { id: 'makassar-detail' })">
                     {{ 'Rp ' . number_format($totald['total_makassar_bb'], 0, ',', '.') }}
                 </td>
@@ -159,7 +159,9 @@
             </tr>
             <tr>
                 <td class="p-2 border">Laba Bersih</td>
-                <td class="p-2 border">{{ 'Rp ' . number_format($totald['total_laba'], 0, ',', '.') }}</td>
+                <td class="p-2 border" style="background-color: #cccf15;">
+                    {{ 'Rp ' . number_format($totald['total_laba'], 0, ',', '.') }}
+                </td>
             </tr>
             <tr>
                 <td class="p-2 border">Laba Bersih 20%</td>
