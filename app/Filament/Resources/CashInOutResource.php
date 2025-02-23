@@ -137,7 +137,7 @@ class CashInOutResource extends Resource
                 TextColumn::make('waktu')
                     ->label('Waktu Transaksi')
                     ->dateTime('d M Y'),
-            ])
+            ])->defaultSort('waktu', 'desc')
             ->filters([
                 \Filament\Tables\Filters\Filter::make('waktu')
                     ->form([
