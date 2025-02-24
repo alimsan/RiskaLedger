@@ -79,11 +79,11 @@
                 </td>
             </tr>
             <tr>
-                <td class="p-2 border">Laba Bersih 20%</td>
+                <td class="p-2 border">Laba Bersih 80%</td>
                 <td class="p-2 border">{{ 'Rp ' . number_format($totald['total_laba_80'], 0, ',', '.') }}</td>
             </tr>
             <tr>
-                <td class="p-2 border">Laba Bersih 80%</td>
+                <td class="p-2 border">Laba Bersih 20%</td>
                 <td class="p-2 border">{{ 'Rp ' . number_format($totald['total_laba_20'], 0, ',', '.') }}</td>
             </tr>
         </tbody>
