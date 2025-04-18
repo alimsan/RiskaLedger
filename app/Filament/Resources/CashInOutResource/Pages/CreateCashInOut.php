@@ -5,7 +5,6 @@ namespace App\Filament\Resources\CashInOutResource\Pages;
 use App\Filament\Resources\CashInOutResource;
 use Filament\Actions;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Database\Eloquent\Model as EloquentModel;
 
 class CreateCashInOut extends CreateRecord
 {

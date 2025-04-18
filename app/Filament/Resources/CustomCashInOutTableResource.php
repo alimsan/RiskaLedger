@@ -37,13 +37,19 @@ class CustomCashInOutTableResource extends Resource
     }
     protected static function getTotalByType(array $types, $tanggal)
     {
-        return mCashInOut::whereIn('type', $types)
+        // Ambil type_id dari type code
+        $typeIds = \App\Models\CashInOutType::whereIn('code', $types)->pluck('id');
+
+        return mCashInOut::whereIn('type_id', $typeIds)
             ->whereDate('waktu', $tanggal)
             ->sum('nilai');
     }
     protected static function getTotalNilai(array $types)
     {
-        $query = mCashInOut::whereIn('type', $types);
+        // Ambil type_id dari type code
+        $typeIds = \App\Models\CashInOutType::whereIn('code', $types)->pluck('id');
+
+        $query = mCashInOut::whereIn('type_id', $typeIds);
 
         $selectedMonth = session('selected_month');
         if ($selectedMonth) {

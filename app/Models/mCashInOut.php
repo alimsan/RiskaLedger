@@ -6,14 +6,28 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+
 class mCashInOut extends Model
 {
     use HasFactory;
     use LogsActivity;
+
     protected $table = 'cash_in_out';
     protected $primaryKey = 'id';
     protected $dateFormat = 'Y-m-d H:i:s';
-    protected $guarded =[];
+    protected $guarded = [];
+
+    public function type()
+    {
+        return $this->belongsTo(CashInOutType::class, 'type_id');
+    }
+
+    // Accessor untuk mendapatkan kode tipe
+    public function getTypeCodeAttribute()
+    {
+        return $this->type ? $this->type->code : $this->attributes['type'] ?? null;
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

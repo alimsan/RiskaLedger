@@ -5,7 +5,7 @@ namespace App\Filament\Resources\CashInOutResource\Pages;
 use App\Filament\Resources\CashInOutResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
-use Illuminate\Database\Eloquent\Model;
+
 class EditCashInOut extends EditRecord
 {
     protected static string $resource = CashInOutResource::class;

@@ -192,7 +192,9 @@
                 $selectedMonth = session('selected_month');
                 $date = \Carbon\Carbon::parse($selectedMonth);
 
-                $makassarDetails = \App\Models\mCashInOut::where('type', 'BB_MAKASSAR')
+                $makassarDetails = \App\Models\mCashInOut::whereHas('type', function($query) {
+                    $query->where('code', 'BB_MAKASSAR');
+                })
                     ->whereBetween('waktu', [
                         $date->copy()->startOfMonth()->startOfDay(),
                         $date->copy()->endOfMonth()->endOfDay()
