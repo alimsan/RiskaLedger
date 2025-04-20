@@ -17,15 +17,47 @@ class mCashInOut extends Model
     protected $dateFormat = 'Y-m-d H:i:s';
     protected $guarded = [];
 
+    protected $fillable = [
+        'tenant_id',
+        'type_id',
+        'nama_barang',
+        'waktu',
+        'nilai',
+        'keterangan',
+        'deksripsi',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     */
+    protected $casts = [
+        'waktu' => 'datetime',
+        'nilai' => 'float',
+    ];
+
     public function type()
     {
         return $this->belongsTo(CashInOutType::class, 'type_id');
     }
 
+    /**
+     * Get the tenant that owns the transaction.
+     */
+    public function tenant()
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
     // Accessor untuk mendapatkan kode tipe
     public function getTypeCodeAttribute()
     {
-        return $this->type ? $this->type->code : $this->attributes['type'] ?? null;
+        if (is_object($this->type) && method_exists($this->type, 'getAttribute')) {
+            return $this->type->code;
+        } elseif (isset($this->attributes['type']) && is_string($this->attributes['type'])) {
+            return $this->attributes['type'];
+        }
+
+        return null;
     }
 
     public function getActivitylogOptions(): LogOptions

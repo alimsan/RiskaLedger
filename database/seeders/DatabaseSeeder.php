@@ -25,5 +25,11 @@ class DatabaseSeeder extends Seeder
             // CashInOutType seeder sudah dijalankan dalam migrasi data
             // CashInOutTypeSeeder::class,
         ]);
+
+        // Add TenantSeeder
+        $this->call(TenantSeeder::class);
+
+        // Add DefaultUserSeeder
+        $this->call(DefaultUserSeeder::class);
     }
 }

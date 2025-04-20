@@ -22,6 +22,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'tenant_id',
     ];
 
     /**
@@ -39,11 +41,75 @@ class User extends Authenticatable
      *
      * @return array<string, string>
      */
-    protected function casts(): array
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+    ];
+
+    /**
+     * Get the tenant that the user belongs to.
+     */
+    public function tenant()
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
+        return $this->belongsTo(Tenant::class);
+    }
+
+    /**
+     * Check if the user is a superadmin.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'superadmin';
+    }
+
+    /**
+     * Check if the user is an admin.
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Check if the user is an owner.
+     */
+    public function isOwner(): bool
+    {
+        return $this->role === 'owner';
+    }
+
+    /**
+     * Check if the user is an operator.
+     */
+    public function isOperator(): bool
+    {
+        return $this->role === 'operator';
+    }
+
+    /**
+     * Check if the user is an administrator (superadmin or admin).
+     */
+    public function isAdministrator(): bool
+    {
+        return in_array($this->role, ['superadmin', 'admin']);
+    }
+
+    /**
+     * Check if the user can access tenant data.
+     */
+    public function canAccessTenant(?int $tenantId = null): bool
+    {
+        // Superadmin and admin can access any tenant
+        if ($this->isAdministrator()) {
+            return true;
+        }
+
+        // If no specific tenant is provided, check if user has a tenant
+        if ($tenantId === null) {
+            return $this->tenant_id !== null;
+        }
+
+        // For regular users, they can only access their own tenant
+        return $this->tenant_id === $tenantId;
     }
 }

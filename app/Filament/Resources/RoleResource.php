@@ -23,7 +23,29 @@ class RoleResource extends Resource
     protected static ?string $modelLabel = 'Peran';
     protected static ?string $pluralModelLabel = 'Peran';
     protected static ?int $navigationSort = 3;
+    public static function canAccess(): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin']);
+    }
+    public static function canCreate(): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin']);
+    }
 
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin']);
+    }
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin']);
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin']);
+    }
     public static function getNavigationGroup(): ?string
     {
         return 'Pengaturan';

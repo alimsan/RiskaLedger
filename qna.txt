@@ -1,0 +1,13 @@
+sepertinya saya butuh menambahkan tabel riwayat untuk transaksi kasir nama tablenya adalah riwayat_transaksi_kasir
+Kolum
+- id
+- cash_in_out_id
+- pituang_id
+- nama_item
+- qty
+- harga_item
+- total_harga
+dimana ketika KasirPage melakukan proses transaksi [submitCheckout] maka akan membuat
+
+
+oke selanjutnya kita kembali ke KasirPage  dimana ketika KasirPage melakukan proses transaksi [submitCheckout] maka akan membuat piutangnya sesuai dengan item , jadi ketika modal sudah muncul untuk submitCheckout akan ada ceklis boolean Piutang dimana ketika ini di ceklis maka prosess data tidak akan masuk pada cash_in_out tapi pada tabel piutang

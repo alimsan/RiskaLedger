@@ -27,20 +27,28 @@ class PermissionResource extends Resource
     {
         return 'Pengaturan';
     }
-
+    public static function canAccess(): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin']);
+    }
     public static function canCreate(): bool
     {
-        return auth()->user()->hasRole('admin');
+        return auth()->user()->hasRole(['admin', 'superadmin']);
     }
 
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return auth()->user()->hasRole('admin');
+        return auth()->user()->hasRole(['admin', 'superadmin']);
     }
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return auth()->user()->hasRole('admin');
+        return auth()->user()->hasRole(['admin', 'superadmin']);
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin']);
     }
 
     public static function form(Form $form): Form

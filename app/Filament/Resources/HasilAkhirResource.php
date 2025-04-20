@@ -5,6 +5,8 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\HasilAkhirResource\Pages;
 use App\Filament\Resources\HasilAkhirResource\RelationManagers;
 use App\Models\mCashInOut;
+use App\Models\CashInOutType;
+use App\Models\Tenant;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -12,6 +14,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Carbon\Carbon;
 
 class HasilAkhirResource extends Resource
 {
@@ -33,26 +36,68 @@ class HasilAkhirResource extends Resource
                 //
             ]);
     }
-    protected static function getTotalNilai(array $types)
+
+    /**
+     * Mendapatkan total nilai transaksi berdasarkan type_id
+     *
+     * @param int $typeId
+     * @param int|null $tenantId
+     * @return float
+     */
+    protected static function getTotalByTypeId(int $typeId, ?int $tenantId = null)
     {
-        $query = mCashInOut::whereIn('type', $types);
+        $query = mCashInOut::where('type_id', $typeId);
+
+        // Filter berdasarkan tenant jika disediakan
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
 
         $selectedMonth = session('selected_month');
         if ($selectedMonth) {
             try {
                 // Parse tanggal dari session
-                $date = \Carbon\Carbon::parse($selectedMonth);
+                $date = Carbon::parse($selectedMonth);
 
                 // Set range tanggal untuk bulan yang dipilih
                 $startDate = $date->copy()->startOfMonth()->startOfDay();
                 $endDate = $date->copy()->endOfMonth()->endOfDay();
 
-                // Debug untuk memastikan range tanggal benar
-                // \Log::info('Date Range', [
-                //     'selected_month' => $selectedMonth,
-                //     'start_date' => $startDate->toDateTimeString(),
-                //     'end_date' => $endDate->toDateTimeString()
-                // ]);
+                // Filter berdasarkan range tanggal
+                $query->whereBetween('waktu', [
+                    $startDate->toDateTimeString(),
+                    $endDate->toDateTimeString()
+                ]);
+            } catch (\Exception $e) {
+                // Log error jika ada masalah dengan format tanggal
+                \Log::error('Error in getTotalByTypeId: ' . $e->getMessage());
+            }
+        }
+
+        return $query->sum('nilai');
+    }
+
+    /**
+     * Mendapatkan total nilai transaksi berdasarkan tipe lama (legacy)
+     */
+    protected static function getTotalNilai(array $types, ?int $tenantId = null)
+    {
+        $query = mCashInOut::whereIn('type', $types);
+
+        // Filter berdasarkan tenant jika disediakan
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        $selectedMonth = session('selected_month');
+        if ($selectedMonth) {
+            try {
+                // Parse tanggal dari session
+                $date = Carbon::parse($selectedMonth);
+
+                // Set range tanggal untuk bulan yang dipilih
+                $startDate = $date->copy()->startOfMonth()->startOfDay();
+                $endDate = $date->copy()->endOfMonth()->endOfDay();
 
                 // Filter berdasarkan range tanggal
                 $query->whereBetween('waktu', [
@@ -65,49 +110,95 @@ class HasilAkhirResource extends Resource
             }
         }
 
-        // Debug untuk melihat query yang dijalankan
-        // \Log::info('SQL Query', [
-        //     'sql' => $query->toSql(),
-        //     'bindings' => $query->getBindings()
-        // ]);
-
         return $query->sum('nilai');
     }
-    public static function getTotaldata(): array
+
+    public static function getTotaldata(?int $tenantId = null): array
     {
-        $data['total_penjualan'] = static::getTotalNilai(['QRIS', 'TUNAI']);
-        $data['total_qris'] = static::getTotalNilai(['QRIS']);
-        $data['total_tunai'] = static::getTotalNilai(['TUNAI']);
-        $data['total_bbaku'] = static::getTotalNilai(['B_BAKU']);
-        $data['total_peralatan'] = static::getTotalNilai(['PERALATAN']);
-        $data['total_band'] = static::getTotalNilai(['BAND']);
-        $data['total_listrik'] = static::getTotalNilai(['LISTRIK']);
-        $data['total_gas'] = static::getTotalNilai(['GAS']);
-        $data['total_refund'] = static::getTotalNilai(['REFUND']);
-        $data['total_kasbon'] = static::getTotalNilai(['KASBON']);
-        $data['total_owner'] = static::getTotalNilai(['OWNER']);
-        $data['total_compliment'] = static::getTotalNilai(['COMPLIMENT']);
-        $data['total_bpjs'] = static::getTotalNilai(['BPJS']);
-        $data['total_makassar_bb'] = static::getTotalNilai(['BB_MAKASSAR']);
-        $data['total_pajak'] = static::getTotalNilai(['PAJAK']);
-        $data['total_tax'] = static::getTotalNilai(['TAX']);
-        $data['total_gaji'] = static::getTotalNilai(['GAJI']);
-        $data['total_cucipiring'] = static::getTotalNilai(['GAJI_C_PIRING']);
-        $data['total_pengeluaran'] = $data['total_bbaku'] + $data['total_peralatan'] + $data['total_band'] + $data['total_listrik']
-            + $data['total_gas'] + $data['total_refund'] + $data['total_kasbon'] + $data['total_owner'] + $data['total_compliment']
-            + $data['total_bpjs'] + $data['total_makassar_bb'] + $data['total_pajak'] + $data['total_tax'] + $data['total_gaji'] + $data['total_cucipiring'];
-        $data['total_laba'] = static::getTotalNilai(['QRIS', 'TUNAI']) - $data['total_pengeluaran'];
-        $data['total_laba_80'] = $data['total_laba'] * 0.8;
-        $data['total_laba_20'] = $data['total_laba'] * 0.2;
+        $data = [];
+
+        // Inisialisasi total pemasukan dan pengeluaran
+        $data['total_income'] = 0;
+        $data['total_pengeluaran'] = 0;
+
+        // Dapatkan tipe transaksi yang aktif
+        $query = CashInOutType::where('is_active', true);
+
+        // Filter berdasarkan tenant jika disediakan
+        if ($tenantId) {
+            $query->where(function($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)
+                  ->orWhereNull('tenant_id');
+            });
+        }
+
+        $types = $query->get();
+
+        // Hitung total untuk setiap tipe
+        foreach ($types as $type) {
+            $code = strtolower($type->code);
+            $totalKey = 'total_' . $code;
+
+            // Dapatkan total untuk tipe ini
+            $total = static::getTotalByTypeId($type->id, $tenantId);
+            $data[$totalKey] = $total;
+
+            // Tambahkan ke total pemasukan atau pengeluaran
+            if ($type->is_income) {
+                $data['total_income'] += $total;
+            } else {
+                $data['total_pengeluaran'] += $total;
+            }
+        }
+
+        // Support untuk kompatibilitas mundur (legacy)
+        $data['total_penjualan'] = $data['total_income'];
+        $data['total_qris'] = static::getTotalNilai(['QRIS'], $tenantId);
+        $data['total_tunai'] = static::getTotalNilai(['TUNAI'], $tenantId);
+
+        // Hitung laba bersih
+        $data['total_laba'] = $data['total_income'] - $data['total_pengeluaran'];
+
+        // Hitung pembagian profit
+        if ($tenantId) {
+            $tenant = Tenant::find($tenantId);
+            if ($tenant) {
+                $profitSharings = $tenant->profitSharings()
+                    ->where('is_active', true)
+                    ->get();
+
+                // Jika profit sharing ditemukan, gunakan untuk menghitung
+                if ($profitSharings->isNotEmpty()) {
+                    foreach ($profitSharings as $sharing) {
+                        $key = 'total_laba_' . \Illuminate\Support\Str::slug($sharing->name);
+                        $data[$key] = $data['total_laba'] * ($sharing->percentage / 100);
+                    }
+                } else {
+                    // Default 80/20 jika tidak ada profit sharing
+                    $data['total_laba_80'] = $data['total_laba'] * 0.8;
+                    $data['total_laba_20'] = $data['total_laba'] * 0.2;
+                }
+            } else {
+                // Default 80/20 jika tenant tidak ditemukan
+                $data['total_laba_80'] = $data['total_laba'] * 0.8;
+                $data['total_laba_20'] = $data['total_laba'] * 0.2;
+            }
+        } else {
+            // Default 80/20 jika tenant tidak ditentukan
+            $data['total_laba_80'] = $data['total_laba'] * 0.8;
+            $data['total_laba_20'] = $data['total_laba'] * 0.2;
+        }
+
         return $data;
     }
+
     public static function table(Table $table): Table
     {
         $selectedMonth = session('selected_month');
         if ($selectedMonth) {
             try {
-                $selectedMonth = \Carbon\Carbon::parse($selectedMonth)->format('Y-m');
-                $date = \Carbon\Carbon::createFromFormat('Y-m', $selectedMonth);
+                $selectedMonth = Carbon::parse($selectedMonth)->format('Y-m');
+                $date = Carbon::createFromFormat('Y-m', $selectedMonth);
                 $startDate = $date->copy()->startOfMonth()->toDateString();
                 $endDate = $date->copy()->endOfMonth()->toDateString();
             } catch (\Exception $e) {
@@ -119,9 +210,12 @@ class HasilAkhirResource extends Resource
             $endDate = now()->endOfMonth()->toDateString();
         }
 
+        // Dapatkan tenant ID dari user yang sedang login
+        $tenantId = auth()->user()->tenant_id;
+
         return $table
             ->view('filament.resources.custom-cash-in-out-table.hasil', [
-                'totald' => static::getTotaldata()
+                'totald' => static::getTotaldata($tenantId)
             ])
             ->filters([
                 //

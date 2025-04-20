@@ -16,4 +16,23 @@ class ListCashInOuts extends ListRecords
             Actions\CreateAction::make(),
         ];
     }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            // Tambahkan widget jika diperlukan
+        ];
+    }
+
+    public function getTitle(): string
+    {
+        $user = auth()->user();
+
+        if ($user->isAdministrator()) {
+            return 'Cash In Out';
+        }
+
+        // Jika bukan admin, tambahkan nama tenant
+        return 'Cash In Out - ' . ($user->tenant ? $user->tenant->name : '');
+    }
 }
