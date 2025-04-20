@@ -207,6 +207,33 @@
                         </select>
                     </div>
 
+                    <div class="flex items-center mt-4">
+                        <input
+                            type="checkbox"
+                            id="is_piutang"
+                            class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                            onchange="toggleVendorSelect()"
+                        >
+                        <label for="is_piutang" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                            Catat sebagai Piutang
+                        </label>
+                    </div>
+
+                    <div id="vendor_select_container" class="mt-3 hidden">
+                        <label for="vendor_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Pilih Vendor
+                        </label>
+                        <select
+                            id="vendor_id"
+                            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
+                        >
+                            <option value="">-- Pilih Vendor --</option>
+                            @foreach($this->vendors as $vendor)
+                                <option value="{{ $vendor->id }}">{{ $vendor->nama_vendor }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             Total Pembayaran
@@ -250,18 +277,29 @@
             document.getElementById('checkoutModal').classList.add('hidden');
         }
 
+        function toggleVendorSelect() {
+            const isPiutang = document.getElementById('is_piutang').checked;
+            document.getElementById('vendor_select_container').classList.toggle('hidden', !isPiutang);
+        }
+
         function submitCheckout() {
             const typeId = document.getElementById('payment_method').value;
             const notes = document.getElementById('notes').value;
+            const isPiutang = document.getElementById('is_piutang').checked;
+            const vendorId = isPiutang ? document.getElementById('vendor_id').value : null;
+
+            // Validasi jika pilihan vendor kosong
+            if (isPiutang && !vendorId) {
+                alert('Silakan pilih vendor terlebih dahulu');
+                return;
+            }
 
             // Panggil method Livewire untuk proses checkout
-            @this.processCheckout({
+            @this.checkout({
                 type_id: typeId,
-                notes: notes
-            }).then((result) => {
-                if (result) {
-                    closeCheckoutModal();
-                }
+                notes: notes,
+                is_receivable: isPiutang,
+                vendor_id: vendorId
             });
         }
 

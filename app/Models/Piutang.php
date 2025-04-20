@@ -14,17 +14,21 @@ class Piutang extends Model
 
     protected $fillable = [
         'vendor_id',
+        'type_id',
         'qty',
         'total_utang',
         'bukti_resi',
         'waktu',
         'tenant_id',
+        'lunas',
+        'image_pelunasan',
     ];
 
     protected $casts = [
         'waktu' => 'datetime',
         'qty' => 'integer',
         'total_utang' => 'decimal:2',
+        'lunas' => 'boolean',
     ];
 
     /**
@@ -44,12 +48,32 @@ class Piutang extends Model
     }
 
     /**
+     * Get the type that owns the piutang.
+     */
+    public function type()
+    {
+        return $this->belongsTo(CashInOutType::class, 'type_id');
+    }
+
+    /**
      * Get the bukti_resi URL attribute.
      */
     public function getBuktiResiUrlAttribute()
     {
         if ($this->bukti_resi) {
             return url('storage/' . $this->bukti_resi);
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the image_pelunasan URL attribute.
+     */
+    public function getImagePelunasanUrlAttribute()
+    {
+        if ($this->image_pelunasan) {
+            return url('storage/' . $this->image_pelunasan);
         }
 
         return null;

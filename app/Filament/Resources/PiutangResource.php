@@ -14,6 +14,11 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Collection;
+use App\Models\CashInOutType;
+use App\Models\mCashInOut;
 
 class PiutangResource extends Resource
 {
@@ -33,57 +38,78 @@ class PiutangResource extends Resource
     public static function form(Form $form): Form
     {
         $user = auth()->user();
-        $formSchema = [
-            Forms\Components\DateTimePicker::make('waktu')
-                ->label('Waktu')
-                ->default(now())
-                ->required(),
-            Forms\Components\Select::make('vendor_id')
-                ->label('Vendor')
-                ->options(function () use ($user) {
-                    $query = Vendor::query();
-                    if (!$user->hasRole(['superadmin', 'admin'])) {
-                        $query->where('tenant_id', $user->tenant_id);
-                    }
-                    return $query->pluck('nama_vendor', 'id');
-                })
-                ->required()
-                ->searchable()
-                ->preload(),
-            Forms\Components\TextInput::make('qty')
-                ->label('Jumlah')
-                ->numeric()
-                ->required(),
-            Forms\Components\TextInput::make('total_utang')
-                ->label('Total Hutang')
-                ->required()
-                ->numeric()
-                ->prefix('Rp'),
-            Forms\Components\FileUpload::make('bukti_resi')
-                ->label('Bukti Resi')
-                ->directory('piutang-resi')
-                ->image()
-                ->maxSize(5120), // 5MB max
-        ];
-
-        // Tambahkan pilihan tenant hanya untuk superadmin dan admin
-        if ($user->hasRole(['superadmin', 'admin'])) {
-            array_splice($formSchema, 2, 0, [
-                Forms\Components\Select::make('tenant_id')
-                    ->label('Tenant')
-                    ->relationship('tenant', 'name')
-                    ->required()
-                    ->searchable()
-                    ->preload()
-                    ->reactive()
-                    ->afterStateUpdated(fn (callable $set) => $set('vendor_id', null)),
-            ]);
-        }
 
         return $form
             ->schema([
                 Forms\Components\Section::make('Data Piutang')
-                    ->schema($formSchema)
+                    ->schema([
+                        Forms\Components\Select::make('vendor_id')
+                            ->label('Vendor')
+                            ->relationship('vendor', 'nama_vendor')
+                            ->required()
+                            ->searchable()
+                            ->preload()
+                            ->createOptionForm([
+                                Forms\Components\TextInput::make('nama_vendor')
+                                    ->required()
+                                    ->maxLength(255),
+                            ]),
+
+                        Forms\Components\Select::make('type_id')
+                            ->label('Tipe Transaksi')
+                            ->relationship('type', 'name', function ($query) {
+                                return $query->where('is_income', false)
+                                    ->where('is_active', true);
+                            })
+                            ->searchable()
+                            ->preload(),
+
+                        Forms\Components\TextInput::make('qty')
+                            ->label('Jumlah Item')
+                            ->required()
+                            ->numeric()
+                            ->default(1),
+
+                        Forms\Components\TextInput::make('total_utang')
+                            ->label('Total Hutang')
+                            ->required()
+                            ->numeric()
+                            ->prefix('Rp')
+                            ->default(0),
+
+                        Forms\Components\DateTimePicker::make('waktu')
+                            ->label('Waktu Transaksi')
+                            ->required()
+                            ->default(now()),
+
+                        Forms\Components\Toggle::make('lunas')
+                            ->label('Status Pelunasan')
+                            ->onColor('success')
+                            ->offColor('danger')
+                            ->default(false),
+                    ])
+                    ->columns(2),
+
+                Forms\Components\Section::make('Bukti Transaksi')
+                    ->schema([
+                        Forms\Components\FileUpload::make('bukti_resi')
+                            ->label('Bukti Transaksi')
+                            ->directory('bukti-resi')
+                            ->image()
+                            ->maxSize(5120),
+
+                        Forms\Components\FileUpload::make('image_pelunasan')
+                            ->label('Bukti Pelunasan')
+                            ->directory('pelunasan-resi')
+                            ->image()
+                            ->maxSize(5120)
+                            ->visible(function (?Piutang $record) {
+                                if ($record) {
+                                    return $record->lunas;
+                                }
+                                return false;
+                            }),
+                    ])
                     ->columns(2),
             ]);
     }
@@ -95,29 +121,58 @@ class PiutangResource extends Resource
             Tables\Columns\TextColumn::make('vendor.nama_vendor')
                 ->label('Vendor')
                 ->searchable(),
+
+            Tables\Columns\TextColumn::make('type.name')
+                ->label('Tipe Transaksi')
+                ->sortable(),
+
             Tables\Columns\TextColumn::make('qty')
-                ->label('Jumlah')
+                ->label('Jumlah Item')
                 ->numeric()
                 ->sortable(),
+
             Tables\Columns\TextColumn::make('total_utang')
                 ->label('Total Hutang')
                 ->money('IDR')
                 ->sortable(),
-            Tables\Columns\ImageColumn::make('bukti_resi')
-                ->label('Bukti Resi')
-                ->disk('public')
-                ->circular(),
+
             Tables\Columns\TextColumn::make('waktu')
                 ->label('Waktu')
                 ->dateTime('d M Y H:i')
                 ->sortable(),
+
+            Tables\Columns\IconColumn::make('lunas')
+                ->label('Status')
+                ->boolean()
+                ->sortable(),
+
+            Tables\Columns\ImageColumn::make('bukti_resi')
+                ->label('Bukti Transaksi')
+                ->disk('public')
+                ->circular(),
+
+            Tables\Columns\ImageColumn::make('image_pelunasan')
+                ->label('Bukti Pelunasan')
+                ->disk('public')
+                ->circular()
+                ->visible(function ($record) {
+                    return $record instanceof Piutang && $record->lunas;
+                }),
+
             Tables\Columns\TextColumn::make('created_at')
                 ->label('Dibuat Pada')
                 ->dateTime('d M Y H:i')
                 ->sortable()
                 ->toggleable(isToggledHiddenByDefault: true),
+
             Tables\Columns\TextColumn::make('updated_at')
                 ->label('Diperbarui Pada')
+                ->dateTime('d M Y H:i')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
+
+            Tables\Columns\TextColumn::make('deleted_at')
+                ->label('Dihapus Pada')
                 ->dateTime('d M Y H:i')
                 ->sortable()
                 ->toggleable(isToggledHiddenByDefault: true),
@@ -177,12 +232,122 @@ class PiutangResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
-                Tables\Actions\ForceDeleteAction::make(),
-                Tables\Actions\RestoreAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('proses_pelunasan')
+                        ->label('Proses Pelunasan')
+                        ->icon('heroicon-o-banknotes')
+                        ->color('success')
+                        ->form([
+                            Forms\Components\FileUpload::make('image_pelunasan')
+                                ->label('Bukti Pelunasan')
+                                ->directory('pelunasan-resi')
+                                ->image()
+                                ->maxSize(5120)
+                                ->required(),
+                        ])
+                        ->action(function (Piutang $record, array $data) {
+                            // Proses pelunasan piutang
+                            DB::beginTransaction();
+                            try {
+                                // 1. Rekam transaksi pelunasan di cash_in_out
+                                $mCashInOut = new mCashInOut();
+                                $mCashInOut->tenant_id = $record->tenant_id;
+                                $mCashInOut->type_id = $record->type_id; // Menggunakan type_id dari piutang
+                                $mCashInOut->nama_barang = 'Pelunasan piutang ' . $record->vendor->nama_vendor;
+                                $mCashInOut->deksripsi = 'Pelunasan piutang dengan jumlah ' . $record->qty . ' item';
+                                $mCashInOut->nilai = $record->total_utang;
+                                $mCashInOut->waktu = now();
+                                $mCashInOut->save();
+
+                                // 2. Update status piutang menjadi lunas
+                                $record->lunas = true;
+                                $record->image_pelunasan = $data['image_pelunasan'];
+                                $record->save();
+
+                                DB::commit();
+
+                                Notification::make()
+                                    ->title('Pelunasan berhasil')
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                DB::rollBack();
+                                Notification::make()
+                                    ->title('Gagal memproses pelunasan')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        })
+                        ->visible(function ($record) {
+                            return $record instanceof Piutang && !$record->lunas;
+                        }),
+                    Tables\Actions\DeleteAction::make(),
+                    Tables\Actions\ForceDeleteAction::make(),
+                    Tables\Actions\RestoreAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\BulkAction::make('bulk_pelunasan')
+                        ->label('Proses Pelunasan Massal')
+                        ->icon('heroicon-o-banknotes')
+                        ->color('success')
+                        ->form([
+                            Forms\Components\FileUpload::make('image_pelunasan')
+                                ->label('Bukti Pelunasan')
+                                ->directory('pelunasan-resi')
+                                ->image()
+                                ->maxSize(5120)
+                                ->required(),
+                        ])
+                        ->action(function (Collection $records, array $data) {
+                            // Validasi hanya piutang yang belum lunas yang bisa diproses
+                            $records = $records->filter(fn (Piutang $record) => !$record->lunas);
+
+                            if ($records->isEmpty()) {
+                                Notification::make()
+                                    ->title('Tidak ada piutang yang dapat diproses')
+                                    ->warning()
+                                    ->send();
+                                return;
+                            }
+
+                            DB::beginTransaction();
+                            try {
+                                foreach ($records as $record) {
+                                    // 1. Rekam transaksi pelunasan di cash_in_out
+                                    $mCashInOut = new mCashInOut();
+                                    $mCashInOut->tenant_id = $record->tenant_id;
+                                    $mCashInOut->type_id = $record->type_id; // Menggunakan type_id dari piutang
+                                    $mCashInOut->nama_barang = 'Pelunasan piutang ' . $record->vendor->nama_vendor;
+                                    $mCashInOut->deksripsi = 'Pelunasan piutang dengan jumlah ' . $record->qty . ' item';
+                                    $mCashInOut->nilai = $record->total_utang;
+                                    $mCashInOut->waktu = now();
+                                    $mCashInOut->save();
+
+                                    // 2. Update status piutang menjadi lunas
+                                    $record->lunas = true;
+                                    $record->image_pelunasan = $data['image_pelunasan'];
+                                    $record->save();
+                                }
+
+                                DB::commit();
+
+                                Notification::make()
+                                    ->title('Pelunasan massal berhasil')
+                                    ->body('Berhasil memproses ' . $records->count() . ' piutang')
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                DB::rollBack();
+                                Notification::make()
+                                    ->title('Gagal memproses pelunasan massal')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
                     Tables\Actions\DeleteBulkAction::make(),
                     Tables\Actions\ForceDeleteBulkAction::make(),
                     Tables\Actions\RestoreBulkAction::make(),

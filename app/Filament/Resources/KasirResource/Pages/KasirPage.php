@@ -14,6 +14,10 @@ use Filament\Notifications\Notification;
 use Carbon\Carbon;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
+use App\Models\Vendor;
+use App\Models\Piutang;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class KasirPage extends Page
 {
@@ -155,57 +159,11 @@ class KasirPage extends Page
             ->get();
     }
 
-    public function processCheckout($data)
+    #[Computed]
+    public function vendors()
     {
-        // Proses transaksi
         $tenantId = auth()->user()->tenant_id;
-        $userId = auth()->id();
-        $typeId = $data['type_id'];
-        $notes = $data['notes'] ?? '';
-        $total = $this->cartTotal();
-
-        try {
-            // Buat daftar item yang dibeli
-            $itemsDetails = [];
-            foreach ($this->cartItems as $item) {
-                $itemsDetails[] = $item['name'] . ' (x' . $item['quantity'] . ')';
-            }
-
-            // Simpan transaksi ke database
-            $transaction = new mCashInOut();
-            $transaction->tenant_id = $tenantId;
-            $transaction->type_id = $typeId;
-            $transaction->nama_barang = 'Penjualan Kasir';
-            $transaction->deksripsi = implode(', ', $itemsDetails);
-            $transaction->keterangan = $notes;
-            $transaction->nilai = $total;
-            $transaction->waktu = Carbon::now();
-            $transaction->save();
-
-            // Bersihkan keranjang
-            $this->clearCart();
-
-            // Beri notifikasi sukses
-            Notification::make()
-                ->title('Transaksi berhasil dicatat')
-                ->success()
-                ->send();
-
-            return true;
-        } catch (\Exception $e) {
-            Notification::make()
-                ->title('Terjadi kesalahan')
-                ->body('Transaksi gagal: ' . $e->getMessage())
-                ->danger()
-                ->send();
-
-            return false;
-        }
-    }
-
-    protected function getHeaderActions(): array
-    {
-        return [];
+        return Vendor::where('tenant_id', $tenantId)->get();
     }
 
     #[On('checkout')]
@@ -228,12 +186,101 @@ class KasirPage extends Page
             return;
         }
 
-        // Proses checkout
-        $success = $this->processCheckout($data);
-
-        if ($success) {
-            // Notifikasi sudah ditampilkan oleh processCheckout
-            $this->dispatch('close-checkout-modal');
+        // Validasi jika ini adalah piutang
+        if (isset($data['is_receivable']) && $data['is_receivable']) {
+            if (empty($data['vendor_id'])) {
+                Notification::make()
+                    ->title('Vendor belum dipilih')
+                    ->warning()
+                    ->send();
+                return;
+            }
         }
+
+        // Proses checkout
+        DB::beginTransaction();
+
+        try {
+            $user = auth()->user();
+            $tenantId = $user->tenant_id;
+            $total = $this->cartTotal();
+
+            // Jika ini adalah piutang
+            if (isset($data['is_receivable']) && $data['is_receivable']) {
+                // Hitung total item di keranjang
+                $totalItems = 0;
+                foreach ($this->cartItems as $item) {
+                    $totalItems += $item['quantity'];
+                }
+
+                // Simpan ke piutang
+                $piutang = new Piutang();
+                $piutang->tenant_id = $tenantId;
+                $piutang->vendor_id = $data['vendor_id'];
+                $piutang->type_id = $data['type_id'];
+                $piutang->qty = $totalItems;
+                $piutang->total_utang = $total;
+                $piutang->waktu = now();
+                $piutang->lunas = false;
+                $piutang->save();
+
+                // Beri notifikasi sukses
+                Notification::make()
+                    ->title('Piutang berhasil dicatat')
+                    ->success()
+                    ->send();
+            } else {
+                // Buat daftar item yang dibeli
+                $itemsDetails = [];
+                foreach ($this->cartItems as $item) {
+                    $itemsDetails[] = $item['name'] . ' (x' . $item['quantity'] . ')';
+                }
+
+                // Simpan transaksi ke database
+                $transaction = new mCashInOut();
+                $transaction->tenant_id = $tenantId;
+                $transaction->type_id = $data['type_id'];
+                $transaction->nama_barang = 'Penjualan Kasir';
+                $transaction->deksripsi = implode(', ', $itemsDetails);
+                $transaction->keterangan = $data['notes'] ?? '';
+                $transaction->nilai = $total;
+                $transaction->waktu = Carbon::now();
+                $transaction->save();
+
+                // Beri notifikasi sukses
+                Notification::make()
+                    ->title('Transaksi berhasil dicatat')
+                    ->success()
+                    ->send();
+            }
+
+            // Commit transaksi
+            DB::commit();
+
+            // Bersihkan keranjang
+            $this->clearCart();
+
+            // Tutup modal
+            $this->dispatch('close-checkout-modal');
+
+        } catch (\Exception $e) {
+            // Rollback transaksi
+            DB::rollBack();
+
+            // Log error
+            Log::error('Checkout error: ' . $e->getMessage());
+
+            // Beri notifikasi error
+            Notification::make()
+                ->title('Terjadi kesalahan')
+                ->body('Transaksi gagal: ' . $e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [];
     }
 }
