@@ -29,7 +29,7 @@
                             <span class="text-2xl font-bold text-black dark:text-white">CashInOut</span>
                         </div>
                         <div class="flex items-center space-x-4">
-                            <a href="/admin/login" class="px-4 py-2 bg-[#FF2D20] text-white rounded-md hover:bg-[#FF2D20]/90 transition">Admin Login</a>
+                            <a href="/admin" class="px-4 py-2 bg-[#FF2D20] dark:text-white rounded-md hover:bg-[#FF2D20]/90 transition">Admin Login</a>
                         </div>
                     </div>
                 </nav>
