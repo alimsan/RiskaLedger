@@ -15,9 +15,9 @@ class DefaultUserSeeder extends Seeder
     public function run(): void
     {
         // Ambil tenant default
-        $tenant = Tenant::first();
+        $tenant = Tenant::where('email','buanaice@gmail.com')->get();
 
-        // Buat superadmin (tidak terikat tenant)
+       /*  // Buat superadmin (tidak terikat tenant)
         User::create([
             'name' => 'Superadmin',
             'email' => 'superadmin@example.com',
@@ -32,7 +32,7 @@ class DefaultUserSeeder extends Seeder
             'password' => bcrypt('password'),
             'role' => 'admin',
         ]);
-
+ */
         // Buat owner untuk tenant default
         User::create([
             'name' => 'Owner',
