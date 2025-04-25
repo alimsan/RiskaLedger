@@ -91,7 +91,7 @@
 
                 <tr>
                     <td class="p-2 border">Total Pengeluaran</td>
-                    <td class="p-2 border">{{ 'Rp ' . number_format($totald['total_pengeluaran'], 0, ',', '.') }}</td>
+                    <td class="p-2 border" style="background-color: #cf9d15;">{{ 'Rp ' . number_format($totald['total_pengeluaran'], 0, ',', '.') }}</td>
                 </tr>
 
                 <tr>

@@ -58,8 +58,11 @@ class PiutangResource extends Resource
                         Forms\Components\Select::make('type_id')
                             ->label('Tipe Transaksi')
                             ->relationship('type', 'name', function ($query) {
-                                return $query->where('is_income', false)
-                                    ->where('is_active', true);
+                                return $query->where('is_income', true)
+                                    ->where('is_active', true)
+                                    ->when(!auth()->user()->hasRole(['superadmin', 'admin']), function ($query) {
+                                        return $query->where('tenant_id', auth()->user()->tenant_id);
+                                    });
                             })
                             ->searchable()
                             ->preload(),
