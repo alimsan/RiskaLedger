@@ -20,3 +20,19 @@ Route::prefix('admin')->middleware(['auth'])->group(function () {
     Route::post('/custom-cash-in-out-tables/select-tenant', [CashInOutDetailController::class, 'selectTenant'])
         ->name('filament.resources.custom-cash-in-out-tables.select-tenant');
 });
+Route::get('/debug-auth', function() {
+    return [
+        'auth' => auth()->check(),
+        'user' => auth()->user(),
+        'session' => session()->all()
+    ];
+});
+Route::get('/debug-middleware', function () {
+    $route = Route::getRoutes()->match(
+        Request::create('/admin/login', 'GET')
+    );
+    return [
+        'middleware' => $route->gatherMiddleware(),
+        'action' => $route->getAction(),
+    ];
+});
