@@ -19,7 +19,7 @@ class DateFilterWidget extends Widget implements Forms\Contracts\HasForms
     {
         return [
             DatePicker::make('selectedMonth')
-                ->label('Pilih Bulan')
+                ->label('Pilih Bulan [tabel rekap & hasil akhir]')
                 ->default(now()->firstOfMonth())
                 ->format('Y-m-d')
                 ->displayFormat('F Y')

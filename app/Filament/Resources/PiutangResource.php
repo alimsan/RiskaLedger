@@ -55,7 +55,7 @@ class PiutangResource extends Resource
                                     ->maxLength(255),
                             ]),
 
-                        Forms\Components\Select::make('type_id')
+                       /*  Forms\Components\Select::make('type_id')
                             ->label('Tipe Transaksi')
                             ->relationship('type', 'name', function ($query) {
                                 return $query->where('is_income', true)
@@ -65,7 +65,7 @@ class PiutangResource extends Resource
                                     });
                             })
                             ->searchable()
-                            ->preload(),
+                            ->preload(), */
 
                         Forms\Components\TextInput::make('qty')
                             ->label('Jumlah Item')
@@ -85,11 +85,11 @@ class PiutangResource extends Resource
                             ->required()
                             ->default(now()),
 
-                        Forms\Components\Toggle::make('lunas')
+                       /*  Forms\Components\Toggle::make('lunas')
                             ->label('Status Pelunasan')
                             ->onColor('success')
                             ->offColor('danger')
-                            ->default(false),
+                            ->default(false), */
                     ])
                     ->columns(2),
 
