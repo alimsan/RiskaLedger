@@ -55,6 +55,9 @@ class TenantResource extends Resource
                             ->label('Deskripsi')
                             ->rows(3)
                             ->columnSpanFull(),
+                        Forms\Components\ColorPicker::make('nota_colour')
+                            ->label('Warna Nota')
+                            ->default('#4a8c36'),
                         Toggle::make('is_active')
                             ->label('Aktif')
                             ->default(true),

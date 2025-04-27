@@ -207,15 +207,23 @@
                         </select>
                     </div>
 
-                    <div class="flex items-center mt-4">
-                        <input
-                            type="checkbox"
-                            id="is_piutang"
-                            class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                            onchange="toggleVendorSelect()"
-                        >
-                        <label for="is_piutang" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                            Catat sebagai Piutang
+                    <div style="padding: 10px 0; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e5e7eb;">
+                        <span style="font-size: 14px; color: #aaa37d;">Catat sebagai Piutang</span>
+                        <label class="switch" style="position: relative; display: inline-block; width: 50px; height: 24px;">
+                            <input type="checkbox" id="is_piutang" onchange="toggleVendorSelect()" style="opacity: 0; width: 0; height: 0;">
+                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; -webkit-transition: .4s; transition: .4s; border-radius: 24px;">
+                                <span class="knob" style="position: absolute; content: ''; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; -webkit-transition: .4s; transition: .4s; border-radius: 50%;"></span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div style="padding: 10px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb;">
+                        <span style="font-size: 14px; color: #aaa37d;">Unduh Nota</span>
+                        <label class="switch" style="position: relative; display: inline-block; width: 50px; height: 24px;">
+                            <input type="checkbox" id="download_receipt" style="opacity: 0; width: 0; height: 0;">
+                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; -webkit-transition: .4s; transition: .4s; border-radius: 24px;">
+                                <span class="knob" style="position: absolute; content: ''; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; -webkit-transition: .4s; transition: .4s; border-radius: 50%;"></span>
+                            </span>
                         </label>
                     </div>
 
@@ -271,6 +279,13 @@
     <script>
         function openCheckoutModal() {
             document.getElementById('checkoutModal').classList.remove('hidden');
+
+            // Reset checkbox values to false when opening modal
+            document.getElementById('is_piutang').checked = false;
+            document.getElementById('download_receipt').checked = false;
+
+            // Hide vendor selection initially
+            document.getElementById('vendor_select_container').classList.add('hidden');
         }
 
         function closeCheckoutModal() {
@@ -287,6 +302,7 @@
             const notes = document.getElementById('notes').value;
             const isPiutang = document.getElementById('is_piutang').checked;
             const vendorId = isPiutang ? document.getElementById('vendor_id').value : null;
+            const downloadReceipt = document.getElementById('download_receipt').checked;
 
             // Validasi jika pilihan vendor kosong
             if (isPiutang && !vendorId) {
@@ -299,7 +315,8 @@
                 type_id: typeId,
                 notes: notes,
                 is_receivable: isPiutang,
-                vendor_id: vendorId
+                vendor_id: vendorId,
+                download_receipt: downloadReceipt
             });
         }
 
@@ -310,4 +327,17 @@
             });
         });
     </script>
+
+    <style>
+        /* Custom styles for toggle switches */
+        .switch input:checked + .slider {
+            background-color: #f59e0b;
+        }
+
+        .switch input:checked + .slider .knob {
+            -webkit-transform: translateX(26px);
+            -ms-transform: translateX(26px);
+            transform: translateX(26px);
+        }
+    </style>
 </x-filament::page>

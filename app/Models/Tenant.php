@@ -20,6 +20,7 @@ class Tenant extends Model
         'email',
         'description',
         'is_active',
+        'nota_colour',
     ];
 
     protected $casts = [

@@ -18,6 +18,7 @@ use App\Models\Vendor;
 use App\Models\Piutang;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class KasirPage extends Page
 {
@@ -257,6 +258,24 @@ class KasirPage extends Page
             // Commit transaksi
             DB::commit();
 
+            // Jika perlu mengunduh nota
+            if (isset($data['download_receipt']) && $data['download_receipt']) {
+                // Siapkan data untuk nota
+                $receiptData = [
+                    'items' => $this->cartItems,
+                    'total' => $total,
+                    'transaction_date' => Carbon::now()->format('d-m-Y H:i:s'),
+                    'transaction_id' => $transaction->id ?? ($piutang->id ?? 'N/A'),
+                    'payment_method' => CashInOutType::find($data['type_id'])->name ?? 'N/A',
+                    'is_receivable' => isset($data['is_receivable']) && $data['is_receivable'],
+                    'vendor' => isset($data['vendor_id']) ? Vendor::find($data['vendor_id'])->nama_vendor : null,
+                    'notes' => $data['notes'] ?? ''
+                ];
+
+                // Generate PDF dan Download
+                return $this->generateReceipt($receiptData);
+            }
+
             // Bersihkan keranjang
             $this->clearCart();
 
@@ -277,6 +296,29 @@ class KasirPage extends Page
                 ->danger()
                 ->send();
         }
+    }
+
+    /**
+     * Generate receipt PDF
+     */
+    protected function generateReceipt($data)
+    {
+        // Ambil data tenant
+        $tenant = \App\Models\Tenant::find(auth()->user()->tenant_id);
+
+        // Tambahkan informasi tenant ke data
+        $data['tenant_name'] = $tenant->name ?? 'N/A';
+        $data['tenant_phone'] = $tenant->phone ?? 'N/A';
+        $data['tenant_address'] = $tenant->address ?? 'N/A';
+        $data['nota_color'] = $tenant->nota_colour ?? '#4a8c36';
+
+        // Generate PDF
+        $pdf = PDF::loadView('receipts.kasir', $data);
+
+        // Send for download
+        return response()->streamDownload(function () use ($pdf) {
+            echo $pdf->output();
+        }, 'nota_' . now()->format('YmdHis') . '.pdf');
     }
 
     protected function getHeaderActions(): array
