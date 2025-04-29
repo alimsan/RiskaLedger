@@ -45,7 +45,10 @@ class ProfitSharingResource extends Resource
     {
         return auth()->user()->hasRole(['admin', 'superadmin','manager']);
     }
-
+    public static function canAccess(): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin','manager','owner']);
+    }
     public static function form(Form $form): Form
     {
         $schema = [
