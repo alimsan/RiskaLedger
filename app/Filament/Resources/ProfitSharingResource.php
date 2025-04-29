@@ -45,6 +45,7 @@ class ProfitSharingResource extends Resource
     {
         return auth()->user()->hasRole(['admin', 'superadmin','manager']);
     }
+
     public static function form(Form $form): Form
     {
         $schema = [
@@ -82,15 +83,23 @@ class ProfitSharingResource extends Resource
                     ->searchable()
                     ->preload()
             );
-        } else {
-            // Untuk user biasa, tenant_id akan diisi otomatis
-            $form->mutateFormDataBeforeCreate(function (array $data) {
-                $data['tenant_id'] = auth()->user()->tenant_id;
-                return $data;
-            });
         }
 
         return $form->schema($schema);
+    }
+
+    public static function getFormMutators(): array
+    {
+        return [
+            'data' => [
+                'create' => function (array $data): array {
+                    if (!auth()->user()->hasRole(['superadmin', 'admin'])) {
+                        $data['tenant_id'] = auth()->user()->tenant_id;
+                    }
+                    return $data;
+                },
+            ],
+        ];
     }
 
     public static function table(Table $table): Table
