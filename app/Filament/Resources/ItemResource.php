@@ -30,7 +30,7 @@ class ItemResource extends Resource
     }
     public static function canAccess(): bool
     {
-        return auth()->user()->hasRole(['owner', 'operator']);
+        return auth()->user()->hasRole(['owner','manager', 'operator']);
     }
     public static function form(Form $form): Form
     {

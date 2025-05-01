@@ -19,6 +19,7 @@ use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Collection;
 use App\Models\CashInOutType;
 use App\Models\mCashInOut;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class PiutangResource extends Resource
 {
@@ -34,7 +35,15 @@ class PiutangResource extends Resource
     {
         return 'Piutang';
     }
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin','manager']);
+    }
 
+    public static function canDeleteAny(): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin','manager']);
+    }
     public static function form(Form $form): Form
     {
         $user = auth()->user();
@@ -351,6 +360,58 @@ class PiutangResource extends Resource
                                     ->send();
                             }
                         }),
+                    Tables\Actions\BulkAction::make('unduh_nota')
+                        ->label('Unduh Nota')
+                        ->icon('heroicon-o-document-text')
+                        ->color('primary')
+                        ->action(function (Collection $records) {
+                            // Pastikan records tidak kosong dan load relation yang diperlukan
+                            if ($records->isEmpty()) {
+                                Notification::make()
+                                    ->title('Tidak ada piutang yang dipilih')
+                                    ->warning()
+                                    ->send();
+                                return;
+                            }
+
+                            // Load relation
+                            $records->load(['vendor', 'type', 'tenant']);
+
+                            // Jika hanya 1 record, download nota langsung
+                            if ($records->count() === 1) {
+                                $piutang = $records->first();
+                                return static::generateReceipt($piutang);
+                            }
+
+                            // Jika lebih dari 1 record, gabungkan menjadi satu nota
+                            $tenant = \App\Models\Tenant::find(auth()->user()->tenant_id);
+
+                            // Siapkan data untuk semua piutang
+                            $items = [];
+                            foreach ($records as $piutang) {
+                                $items[] = [
+                                    'vendor' => $piutang->vendor->nama_vendor,
+                                    'transaction_id' => $piutang->id,
+                                    'transaction_date' => Carbon::parse($piutang->waktu)->format('d-m-Y'),
+                                    'quantity' => $piutang->qty,
+                                    'total' => $piutang->total_utang,
+                                ];
+                            }
+
+                            // Generate PDF dengan satu nota yang berisi semua piutang
+                            $pdf = PDF::loadView('receipts.piutang-combined', [
+                                'items' => $items,
+                                'tenant_name' => $tenant->name ?? 'N/A',
+                                'tenant_phone' => $tenant->phone ?? 'N/A',
+                                'tenant_address' => $tenant->address ?? 'N/A',
+                                'nota_color' => $tenant->nota_colour ?? '#4a8c36',
+                            ]);
+
+                            // Download PDF
+                            return response()->streamDownload(function () use ($pdf) {
+                                echo $pdf->output();
+                            }, 'nota_piutang_gabungan_' . now()->format('YmdHis') . '.pdf');
+                        }),
                     Tables\Actions\DeleteBulkAction::make(),
                     Tables\Actions\ForceDeleteBulkAction::make(),
                     Tables\Actions\RestoreBulkAction::make(),
@@ -389,5 +450,60 @@ class PiutangResource extends Resource
         }
 
         return $query;
+    }
+
+    /**
+     * Generate receipt PDF for a single Piutang
+     */
+    protected static function generateReceipt(Piutang $piutang)
+    {
+        // Ambil data tenant
+        $tenant = \App\Models\Tenant::find($piutang->tenant_id);
+
+        // Siapkan data untuk nota
+        $data = static::generateReceiptData($piutang, $tenant);
+
+        // Generate PDF
+        $pdf = PDF::loadView('receipts.kasir', $data);
+
+        // Send for download
+        return response()->streamDownload(function () use ($pdf) {
+            echo $pdf->output();
+        }, 'nota_piutang_' . $piutang->id . '_' . now()->format('YmdHis') . '.pdf');
+    }
+
+    /**
+     * Prepare data for receipt
+     */
+    protected static function generateReceiptData(Piutang $piutang, $tenant = null)
+    {
+        if (!$tenant) {
+            $tenant = \App\Models\Tenant::find($piutang->tenant_id);
+        }
+
+        // Siapkan item untuk nota (vendor sebagai item)
+        $items = [
+            [
+                'name' => $piutang->vendor->nama_vendor,
+                'quantity' => $piutang->qty,
+                'price' => $piutang->total_utang / $piutang->qty,
+            ]
+        ];
+
+        // Siapkan data untuk nota
+        return [
+            'items' => $items,
+            'total' => $piutang->total_utang,
+            'transaction_date' => Carbon::parse($piutang->waktu)->format('d-m-Y H:i:s'),
+            'transaction_id' => $piutang->id,
+            'payment_method' => $piutang->type->name ?? 'N/A',
+            'is_receivable' => true,
+            'vendor' => $piutang->vendor->nama_vendor,
+            'notes' => '',
+            'tenant_name' => $tenant->name ?? 'N/A',
+            'tenant_phone' => $tenant->phone ?? 'N/A',
+            'tenant_address' => $tenant->address ?? 'N/A',
+            'nota_color' => $tenant->nota_colour ?? '#4a8c36',
+        ];
     }
 }
