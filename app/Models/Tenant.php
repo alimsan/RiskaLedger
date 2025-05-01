@@ -21,6 +21,7 @@ class Tenant extends Model
         'description',
         'is_active',
         'nota_colour',
+        'logo',
     ];
 
     protected $casts = [

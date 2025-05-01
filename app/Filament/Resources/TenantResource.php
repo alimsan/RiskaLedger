@@ -17,6 +17,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\BooleanColumn;
+use Filament\Tables\Columns\ImageColumn;
 
 class TenantResource extends Resource
 {
@@ -58,6 +59,14 @@ class TenantResource extends Resource
                         Forms\Components\ColorPicker::make('nota_colour')
                             ->label('Warna Nota')
                             ->default('#4a8c36'),
+                        Forms\Components\FileUpload::make('logo')
+                            ->label('Logo')
+                            ->image()
+                            ->imagePreviewHeight('100')
+                            ->directory('tenant-logos')
+                            ->visibility('public')
+                            ->disk('public')
+                            ->columnSpanFull(),
                         Toggle::make('is_active')
                             ->label('Aktif')
                             ->default(true),
@@ -70,6 +79,12 @@ class TenantResource extends Resource
     {
         return $table
             ->columns([
+                ImageColumn::make('logo')
+                    ->label('Logo')
+                    ->circular()
+                    ->height(50)
+                    ->visibility('public')
+                    ->disk('public'),
                 TextColumn::make('name')
                     ->label('Nama')
                     ->searchable()
