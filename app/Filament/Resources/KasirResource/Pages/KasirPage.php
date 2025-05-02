@@ -244,6 +244,25 @@ class KasirPage extends Page
                 $transaction->nama_barang = 'Penjualan Kasir';
                 $transaction->deksripsi = implode(', ', $itemsDetails);
                 $transaction->keterangan = $data['notes'] ?? '';
+
+                // Tambahkan informasi pembeli dan kasir jika disertakan
+                $additionalInfo = [];
+
+                if (isset($data['buyer_name']) && $data['buyer_name']) {
+                    $additionalInfo[] = 'Pembeli: ' . $data['buyer_name'];
+                }
+
+                if (isset($data['cashier_name']) && $data['cashier_name']) {
+                    $additionalInfo[] = 'Kasir: ' . $data['cashier_name'];
+                }
+
+                if (!empty($additionalInfo)) {
+                    $infoString = implode("\n", $additionalInfo);
+                    $transaction->keterangan = $transaction->keterangan
+                        ? $transaction->keterangan . "\n" . $infoString
+                        : $infoString;
+                }
+
                 $transaction->nilai = $total;
                 $transaction->waktu = Carbon::now();
                 $transaction->save();

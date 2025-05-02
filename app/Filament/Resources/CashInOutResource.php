@@ -126,14 +126,19 @@ class CashInOutResource extends Resource
                 ->badge()
                 ->color(fn ($state): string => $state ? 'success' : 'danger')
                 ->icon(fn ($state): string => $state ? 'heroicon-o-arrow-down' : 'heroicon-o-arrow-up'),
+            TextColumn::make('keterangan')
+                ->label('Keterangan')
+                ->html()
+                ->formatStateUsing(fn ($state) => nl2br(e($state)))
+                ->toggleable(isToggledHiddenByDefault: true),
             TextColumn::make('nilai')
                 ->label('Nilai')
                 ->formatStateUsing(function ($state) {
                     return 'Rp ' . number_format($state, 0, ',', '.');
                 })
                 ->sortable(),
-            TextColumn::make('keterangan')
-                ->label('Keterangan')
+            TextColumn::make('deksripsi')
+                ->label('Deskripsi')
                 ->limit(30)
                 ->toggleable(isToggledHiddenByDefault: true),
             TextColumn::make('waktu')
