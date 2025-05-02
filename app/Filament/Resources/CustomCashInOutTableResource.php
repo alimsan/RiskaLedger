@@ -174,6 +174,14 @@ class CustomCashInOutTableResource extends Resource
             $data->tanggal = $tanggal;
             $data->penjualan = 0;
 
+            // Untuk debugging jika tanggal 02-05-2025
+            $debugInfo = [];
+            $isDebugDate = ($date_str == '2025-05-02');
+
+            if ($isDebugDate) {
+                \Log::info("======== MEMULAI DEBUG TANGGAL 02-05-2025 ========");
+            }
+
             // Inisialisasi kolom untuk tipe pendapatan
             foreach ($incomeTypes as $type) {
                 $code = strtolower($type->code);
@@ -189,12 +197,22 @@ class CustomCashInOutTableResource extends Resource
             // Jumlah = pendapatan - pengeluaran
             $data->tb1_jumlah = 0;
 
+            // Tracking transaksi untuk mencegah duplikasi
+            $processedTransactions = [];
+
             // Filter data untuk tanggal ini
             $filtered_data = $cash_in_out->filter(function ($item) use ($date_str) {
                 return date('Y-m-d', strtotime($item->waktu)) == $date_str;
             });
 
+            if ($isDebugDate) {
+                \Log::info("Jumlah transaksi pada 02-05-2025: " . $filtered_data->count());
+            }
+
             // Hitung penjualan dan kategorikan transaksi
+            $totalPendapatanHariIni = 0;
+            $totalPengeluaranHariIni = 0;
+
             foreach ($filtered_data as $item) {
                 try {
                     // Pastikan type_id ada dan valid
@@ -203,12 +221,38 @@ class CustomCashInOutTableResource extends Resource
                         continue;
                     }
 
+                    // Cek apakah transaksi ini sudah diproses (mencegah duplikasi)
+                    $transactionKey = $item->id . '-' . $item->type_id;
+                    if (in_array($transactionKey, $processedTransactions)) {
+                        if ($isDebugDate) {
+                            \Log::warning("Melewati transaksi duplikat: " . $transactionKey);
+                        }
+                        continue;
+                    }
+                    $processedTransactions[] = $transactionKey;
+
                     $type = $typeById[$item->type_id];
                     $code = strtolower($type->code);
 
-                    // Cek apakah ini pendapatan
+                    // Debug info
+                    if ($isDebugDate) {
+                        $debugInfo[] = [
+                            'id' => $item->id,
+                            'type_id' => $item->type_id,
+                            'type_name' => $type->name,
+                            'code' => $code,
+                            'is_income' => $type->is_income ? 'Ya' : 'Tidak',
+                            'nilai' => $item->nilai,
+                            'waktu' => $item->waktu
+                        ];
+                    }
+
+                    // Langsung hitung pendapatan atau pengeluaran
                     if ($type->is_income) {
+                        $totalPendapatanHariIni += $item->nilai;
                         $data->penjualan += $item->nilai;
+                    } else {
+                        $totalPengeluaranHariIni += $item->nilai;
                     }
 
                     // Tambahkan ke kategori yang sesuai
@@ -225,24 +269,48 @@ class CustomCashInOutTableResource extends Resource
                 }
             }
 
-            // Hitung total pengeluaran
+            // PERBAIKAN: Gunakan langsung total pendapatan - total pengeluaran
+            // tanpa menghitung ulang dari kategori untuk menghindari duplikasi
+            $data->tb1_jumlah = $totalPendapatanHariIni - $totalPengeluaranHariIni;
+
+            // Hanya untuk verifikasi dan debugging
+            $totalPendapatan = 0;
             $totalPengeluaran = 0;
+            $logItemPengeluaran = [];
+
+            // Hitung total pengeluaran untuk log/debugging
             foreach ($expenseTypes as $type) {
                 $code = strtolower($type->code);
-                if (property_exists($data, $code)) {
+                if (property_exists($data, $code) && $data->$code > 0) {
                     $totalPengeluaran += $data->$code;
+                    if ($isDebugDate) {
+                        \Log::info("Pengeluaran {$type->name} ({$code}): " . $data->$code);
+                        $logItemPengeluaran[] = "Tipe: {$type->name}, Kode: {$code}, Nilai: {$data->$code}";
+                    }
                 }
             }
 
-            // Hitung total pendapatan - pengeluaran
-            $totalPendapatan = 0;
-            foreach ($incomeTypes as $type) {
-                $code = strtolower($type->code);
-                if (property_exists($data, $code)) {
-                    $totalPendapatan += $data->$code;
+            // Tambahkan log untuk debugging
+            if ($isDebugDate) {
+                \Log::info("HASIL PERBAIKAN - Tanggal: " . $tanggal .
+                           ", Pendapatan: " . $totalPendapatanHariIni .
+                           ", Pengeluaran: " . $totalPengeluaranHariIni .
+                           ", tb1_jumlah: " . $data->tb1_jumlah);
+                \Log::info("VERIFIKASI - Penjualan: " . $data->penjualan . ", Total Pengeluaran (verifikasi): " . $totalPengeluaran);
+
+                if (empty($logItemPengeluaran)) {
+                    \Log::info("DETAIL PENGELUARAN - Tanggal: " . $tanggal . " - Tidak ada pengeluaran");
+                } else {
+                    \Log::info("DETAIL PENGELUARAN - Tanggal: " . $tanggal . ", Items: " . implode(", ", $logItemPengeluaran));
                 }
+
+                // Log semua transaksi pada tanggal ini
+                foreach ($debugInfo as $index => $info) {
+                    \Log::info("TRANSAKSI #{$index} - " . json_encode($info, JSON_PRETTY_PRINT));
+                }
+
+                \Log::info("======== SELESAI DEBUG TANGGAL 02-05-2025 ========");
             }
-            $data->tb1_jumlah = $totalPendapatan - $totalPengeluaran;
 
             $result[] = $data;
         }

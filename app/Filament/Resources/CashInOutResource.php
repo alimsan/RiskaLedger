@@ -129,8 +129,7 @@ class CashInOutResource extends Resource
             TextColumn::make('keterangan')
                 ->label('Keterangan')
                 ->html()
-                ->formatStateUsing(fn ($state) => nl2br(e($state)))
-                ->toggleable(isToggledHiddenByDefault: true),
+                ->formatStateUsing(fn ($state) => nl2br(e($state))),
             TextColumn::make('nilai')
                 ->label('Nilai')
                 ->formatStateUsing(function ($state) {
