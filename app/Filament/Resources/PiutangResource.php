@@ -335,7 +335,7 @@ class PiutangResource extends Resource
                                     $mCashInOut->nama_barang = 'Pelunasan piutang ' . $record->vendor->nama_vendor;
                                     $mCashInOut->deksripsi = 'Pelunasan piutang dengan jumlah ' . $record->qty . ' item';
                                     $mCashInOut->nilai = $record->total_utang;
-                                    $mCashInOut->waktu = now();
+                                    $mCashInOut->waktu = now();// Penting !!! sepertinya disini ketika pelunasan massal harusnya menggunakan waktu dari utang terbit ?
                                     $mCashInOut->save();
 
                                     // 2. Update status piutang menjadi lunas

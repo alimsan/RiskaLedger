@@ -12,6 +12,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Filament\Notifications\Notification;
 
 class CashInOutTypeResource extends Resource
 {
@@ -171,11 +172,36 @@ class CashInOutTypeResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->before(function (Tables\Actions\DeleteAction $action, CashInOutType $record) {
+                        if ($record->transactions()->exists()) {
+                            Notification::make()
+                                ->title('Tidak dapat menghapus')
+                                ->body('Jenis transaksi ini masih digunakan dalam transaksi kas.')
+                                ->danger()
+                                ->send();
+
+                            $action->cancel();
+                        }
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->before(function (Tables\Actions\DeleteBulkAction $action, \Illuminate\Database\Eloquent\Collection $records) {
+                            foreach ($records as $record) {
+                                if ($record->transactions()->exists()) {
+                                    Notification::make()
+                                        ->title('Tidak dapat menghapus')
+                                        ->body('Beberapa jenis transaksi masih digunakan dalam transaksi kas.')
+                                        ->danger()
+                                        ->send();
+
+                                    $action->cancel();
+                                    break;
+                                }
+                            }
+                        }),
                 ]),
             ])
             ->defaultSort('sort_order');
