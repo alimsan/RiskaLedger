@@ -39,7 +39,10 @@ class PiutangResource extends Resource
     {
         return auth()->user()->hasRole(['admin', 'superadmin','manager']);
     }
-
+    public static function canCreate(): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin','manager']);
+    }
     public static function canDeleteAny(): bool
     {
         return auth()->user()->hasRole(['admin', 'superadmin','manager']);
@@ -268,7 +271,7 @@ class PiutangResource extends Resource
                                 $mCashInOut->nama_barang = 'Pelunasan piutang ' . $record->vendor->nama_vendor;
                                 $mCashInOut->deksripsi = 'Pelunasan piutang dengan jumlah ' . $record->qty . ' item';
                                 $mCashInOut->nilai = $record->total_utang;
-                                $mCashInOut->waktu = now();
+                                $mCashInOut->waktu = $record->waktu;
                                 $mCashInOut->save();
 
                                 // 2. Update status piutang menjadi lunas
