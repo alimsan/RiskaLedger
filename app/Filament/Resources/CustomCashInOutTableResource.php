@@ -3,19 +3,12 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\CustomCashInOutTableResource\Pages;
-use App\Filament\Resources\CustomCashInOutTableResource\RelationManagers;
 use App\Models\mCashInOut;
 use App\Models\CashInOutType;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
-use Filament\Tables;
 use Filament\Tables\Table;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Style\Font;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
 use Filament\Tables\Filters\Filter;
 use Carbon\Carbon;
@@ -173,6 +166,7 @@ class CustomCashInOutTableResource extends Resource
             $data = new \stdClass();
             $data->tanggal = $tanggal;
             $data->penjualan = 0;
+            $data->total_qty = 0; // Inisialisasi total quantity
 
             // Untuk debugging jika tanggal 02-05-2025
             $debugInfo = [];
@@ -212,6 +206,14 @@ class CustomCashInOutTableResource extends Resource
             // Hitung penjualan dan kategorikan transaksi
             $totalPendapatanHariIni = 0;
             $totalPengeluaranHariIni = 0;
+
+            // Hitung total quantity dari transaction_items berdasarkan tanggal saja
+            $totalQty = \App\Models\TransactionItems::whereDate('waktu', $date_str)
+                ->join('items', 'transaction_items.item_id', '=', 'items.id')
+                ->where('items.tenant_id', $tenantId)
+                ->sum('quantity');
+
+            $data->total_qty = $totalQty;
 
             foreach ($filtered_data as $item) {
                 try {
@@ -344,6 +346,7 @@ class CustomCashInOutTableResource extends Resource
         $result['total_penjualan'] = 0;
         $result['total_pengeluaran'] = 0;
         $result['total_income'] = 0;
+        $result['total_qty'] = 0; // Inisialisasi total quantity
 
         // Inisialisasi total untuk semua tipe pendapatan
         foreach ($incomeTypes as $type) {
@@ -385,6 +388,15 @@ class CustomCashInOutTableResource extends Resource
 
         // Ambil data
         $cashinouts = $query->get();
+
+        // Hitung total quantity untuk periode ini berdasarkan range tanggal
+        $result['total_qty'] = \App\Models\TransactionItems::whereBetween('waktu', [
+                $startDate->startOfDay()->toDateTimeString(),
+                $endDate->endOfDay()->toDateTimeString()
+            ])
+            ->join('items', 'transaction_items.item_id', '=', 'items.id')
+            ->where('items.tenant_id', $tenantId)
+            ->sum('quantity');
 
         // Hitung total per kategori
         foreach ($cashinouts as $item) {

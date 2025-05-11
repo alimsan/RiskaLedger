@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CashInOutDetailController;
+use App\Http\Controllers\TransactionItemsController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -20,6 +21,12 @@ Route::prefix('admin')->middleware(['auth'])->group(function () {
     Route::post('/custom-cash-in-out-tables/select-tenant', [CashInOutDetailController::class, 'selectTenant'])
         ->name('filament.resources.custom-cash-in-out-tables.select-tenant');
 });
+
+// Tambahkan route untuk detail transaksi items
+Route::get('/admin/transaction-items/detail', [TransactionItemsController::class, 'getDetail'])
+    ->middleware(['auth', 'verified'])
+    ->name('transaction-items.detail');
+
 Route::get('/debug-auth', function() {
     return [
         'auth' => auth()->check(),

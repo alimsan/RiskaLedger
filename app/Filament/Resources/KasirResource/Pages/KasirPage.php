@@ -16,6 +16,7 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use App\Models\Vendor;
 use App\Models\Piutang;
+use App\Models\TransactionItems;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -225,6 +226,20 @@ class KasirPage extends Page
                 $piutang->lunas = false;
                 $piutang->save();
 
+                // Simpan ke tabel transaction_items
+                foreach ($this->cartItems as $item) {
+                    $transactionItem = new TransactionItems();
+                    $transactionItem->transaction_id = $piutang->id;
+                    $transactionItem->item_id = $item['id'];
+                    $transactionItem->cash_in_out_type_id = $data['type_id'];
+                    $transactionItem->transaction_type = 'piutang';
+                    $transactionItem->quantity = $item['quantity'];
+                    $transactionItem->price = $item['price'];
+                    $transactionItem->subtotal = $item['price'] * $item['quantity'];
+                    $transactionItem->waktu = now();
+                    $transactionItem->save();
+                }
+
                 // Beri notifikasi sukses
                 Notification::make()
                     ->title('Piutang berhasil dicatat')
@@ -237,7 +252,7 @@ class KasirPage extends Page
                     $itemsDetails[] = $item['name'] . ' (x' . $item['quantity'] . ')';
                 }
 
-                // Simpan transaksi ke database
+                // Simpan transaksi ke database cash_in_out
                 $transaction = new mCashInOut();
                 $transaction->tenant_id = $tenantId;
                 $transaction->type_id = $data['type_id'];
@@ -266,6 +281,20 @@ class KasirPage extends Page
                 $transaction->nilai = $total;
                 $transaction->waktu = Carbon::now();
                 $transaction->save();
+
+                // Simpan ke tabel transaction_items
+                foreach ($this->cartItems as $item) {
+                    $transactionItem = new TransactionItems();
+                    $transactionItem->transaction_id = $transaction->id;
+                    $transactionItem->item_id = $item['id'];
+                    $transactionItem->cash_in_out_type_id = $data['type_id'];
+                    $transactionItem->transaction_type = 'penjualan';
+                    $transactionItem->quantity = $item['quantity'];
+                    $transactionItem->price = $item['price'];
+                    $transactionItem->subtotal = $item['price'] * $item['quantity'];
+                    $transactionItem->waktu = now();
+                    $transactionItem->save();
+                }
 
                 // Beri notifikasi sukses
                 Notification::make()

@@ -121,6 +121,9 @@
                     <th scope="col" class="px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         Penjualan
                     </th>
+                    <th scope="col" class="px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        QTY
+                    </th>
 
                     <!-- Header untuk semua tipe pemasukan -->
                     @foreach($incomeTypes as $type)
@@ -153,6 +156,15 @@
                         <td class="px-4 py-2 whitespace-nowrap text-right">
                             Rp {{ number_format($record->penjualan, 0, ',', '.') }}
                         </td>
+                        <td class="px-4 py-2 whitespace-nowrap text-right">
+                            @if($record->total_qty > 0)
+                                <a href="#" class="text-blue-600 hover:underline dark:text-blue-400" onclick="showQtyDetail('{{ $record->tanggal }}')">
+                                    {{ $record->total_qty }}
+                                </a>
+                            @else
+                                0
+                            @endif
+                        </td>
 
                         <!-- Data untuk setiap tipe pemasukan -->
                         @foreach($incomeTypes as $type)
@@ -183,6 +195,15 @@
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap text-right">
                         Rp {{ number_format($totalData['total_penjualan'], 0, ',', '.') }}
+                    </td>
+                    <td class="px-4 py-2 whitespace-nowrap text-right">
+                        @if($totalData['total_qty'] > 0)
+                            <a href="#" class="text-blue-600 hover:underline dark:text-blue-400" onclick="showQtyDetail('all')">
+                                {{ $totalData['total_qty'] }}
+                            </a>
+                        @else
+                            0
+                        @endif
                     </td>
 
                     <!-- Total untuk setiap tipe pemasukan -->
@@ -276,6 +297,23 @@
     </div>
 </div>
 
+<!-- Modal Detail QTY -->
+<div id="qtyDetailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-3xl max-h-[80vh] overflow-auto">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold dark:text-white" id="qtyModalTitle">Detail Kuantitas</h2>
+            <button onclick="closeQtyModal()" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div id="qtyModalContent" class="overflow-x-auto dark:text-gray-200">
+            <!-- QTY Detail content will be populated here -->
+        </div>
+    </div>
+</div>
+
 <script>
     function showDetail(type, typeName) {
         const modal = document.getElementById('detailModal');
@@ -344,8 +382,90 @@
             });
     }
 
+    function showQtyDetail(tanggal) {
+        const modal = document.getElementById('qtyDetailModal');
+        const modalTitle = document.getElementById('qtyModalTitle');
+        const modalContent = document.getElementById('qtyModalContent');
+
+        modalTitle.textContent = tanggal === 'all' ? 'Detail Kuantitas Semua' : 'Detail Kuantitas ' + tanggal;
+        modalContent.innerHTML = '<div class="flex justify-center"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-gray-100"></div></div>';
+        modal.classList.remove('hidden');
+
+        // Mendapatkan data dari server
+        fetch(`/admin/transaction-items/detail?tenant_id={{ $tenantId }}&date=${tanggal}&month={{ session('selected_month', now()->format('Y-m')) }}`)
+            .then(response => response.json())
+            .then(data => {
+                let detailHTML = `
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead>
+                            <tr class="bg-gray-50 dark:bg-gray-700">
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nama Item</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tipe Transaksi</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Kuantitas</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Harga Satuan</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                `;
+
+                if (data.length === 0) {
+                    detailHTML += `
+                        <tr>
+                            <td colspan="5" class="px-4 py-2 text-center text-sm">Tidak ada data</td>
+                        </tr>
+                    `;
+                } else {
+                    let totalQty = 0;
+                    let totalAmount = 0;
+
+                    data.forEach(item => {
+                        totalQty += parseInt(item.quantity);
+                        totalAmount += parseInt(item.subtotal);
+
+                        const tipeTrans = item.transaction_type === 'piutang' ? 'Piutang' : 'Penjualan';
+
+                        detailHTML += `
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 py-2">${item.item_name || '-'}</td>
+                                <td class="px-4 py-2">${tipeTrans}</td>
+                                <td class="px-4 py-2 text-right">${item.quantity}</td>
+                                <td class="px-4 py-2 text-right">Rp ${new Intl.NumberFormat('id-ID').format(item.price)}</td>
+                                <td class="px-4 py-2 text-right">Rp ${new Intl.NumberFormat('id-ID').format(item.subtotal)}</td>
+                            </tr>
+                        `;
+                    });
+
+                    detailHTML += `
+                        <tr class="bg-gray-100 dark:bg-gray-700 font-semibold">
+                            <td colspan="2" class="px-4 py-2 text-right">Total:</td>
+                            <td class="px-4 py-2 text-right">${totalQty}</td>
+                            <td class="px-4 py-2 text-right"></td>
+                            <td class="px-4 py-2 text-right">Rp ${new Intl.NumberFormat('id-ID').format(totalAmount)}</td>
+                        </tr>
+                    `;
+                }
+
+                detailHTML += `
+                        </tbody>
+                    </table>
+                `;
+
+                modalContent.innerHTML = detailHTML;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                modalContent.innerHTML = '<div class="text-red-500 dark:text-red-400">Terjadi kesalahan saat mengambil data.</div>';
+            });
+    }
+
     function closeModal() {
         const modal = document.getElementById('detailModal');
+        modal.classList.add('hidden');
+    }
+
+    function closeQtyModal() {
+        const modal = document.getElementById('qtyDetailModal');
         modal.classList.add('hidden');
     }
 </script>
