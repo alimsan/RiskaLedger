@@ -237,6 +237,27 @@
                         </label>
                     </div>
 
+                    <div style="padding: 10px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb;">
+                        <span style="font-size: 14px; color: #aaa37d;">Atur Waktu Transaksi</span>
+                        <label class="switch" style="position: relative; display: inline-block; width: 50px; height: 24px;">
+                            <input type="checkbox" id="custom_time" onchange="toggleCustomTime()" style="opacity: 0; width: 0; height: 0;">
+                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; -webkit-transition: .4s; transition: .4s; border-radius: 24px;">
+                                <span class="knob" style="position: absolute; content: ''; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; -webkit-transition: .4s; transition: .4s; border-radius: 50%;"></span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div id="custom_time_container" class="mt-3 hidden">
+                        <label for="transaction_time" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Waktu Transaksi
+                        </label>
+                        <input
+                            type="datetime-local"
+                            id="transaction_time"
+                            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
+                        >
+                    </div>
+
                     <div id="buyer_info_container" class="mt-3 hidden">
                         <div class="mb-3">
                             <label for="buyer_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -321,10 +342,24 @@
             document.getElementById('is_piutang').checked = false;
             document.getElementById('download_receipt').checked = false;
             document.getElementById('add_buyer_info').checked = false;
+            document.getElementById('custom_time').checked = false;
+
+            // Set nilai default datetime-local ke waktu sekarang
+            const now = new Date();
+            // Format tanggal untuk input datetime-local (YYYY-MM-DDThh:mm)
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+            document.getElementById('transaction_time').value = formattedDate;
 
             // Hide vendor selection initially
             document.getElementById('vendor_select_container').classList.add('hidden');
             document.getElementById('buyer_info_container').classList.add('hidden');
+            document.getElementById('custom_time_container').classList.add('hidden');
         }
 
         function closeCheckoutModal() {
@@ -341,6 +376,11 @@
             document.getElementById('buyer_info_container').classList.toggle('hidden', !addBuyerInfo);
         }
 
+        function toggleCustomTime() {
+            const customTime = document.getElementById('custom_time').checked;
+            document.getElementById('custom_time_container').classList.toggle('hidden', !customTime);
+        }
+
         function submitCheckout() {
             const typeId = document.getElementById('payment_method').value;
             const notes = document.getElementById('notes').value;
@@ -350,6 +390,8 @@
             const addBuyerInfo = document.getElementById('add_buyer_info').checked;
             const buyerName = addBuyerInfo ? document.getElementById('buyer_name').value : null;
             const cashierName = addBuyerInfo ? document.getElementById('cashier_name').value : null;
+            const customTime = document.getElementById('custom_time').checked;
+            const transactionTime = customTime ? document.getElementById('transaction_time').value : null;
 
             // Validasi jika pilihan vendor kosong
             if (isPiutang && !vendorId) {
@@ -365,7 +407,8 @@
                 vendor_id: vendorId,
                 download_receipt: downloadReceipt,
                 buyer_name: buyerName,
-                cashier_name: cashierName
+                cashier_name: cashierName,
+                transaction_time: transactionTime
             });
         }
 

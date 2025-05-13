@@ -207,6 +207,11 @@ class KasirPage extends Page
             $tenantId = $user->tenant_id;
             $total = $this->cartTotal();
 
+            // Set waktu transaksi (gunakan custom time jika ada, atau waktu sekarang jika tidak)
+            $transactionTime = !empty($data['transaction_time'])
+                ? Carbon::parse($data['transaction_time'])
+                : now();
+
             // Jika ini adalah piutang
             if (isset($data['is_receivable']) && $data['is_receivable']) {
                 // Hitung total item di keranjang
@@ -222,7 +227,7 @@ class KasirPage extends Page
                 $piutang->type_id = $data['type_id'];
                 $piutang->qty = $totalItems;
                 $piutang->total_utang = $total;
-                $piutang->waktu = now();
+                $piutang->waktu = $transactionTime;
                 $piutang->lunas = false;
                 $piutang->save();
 
@@ -236,7 +241,7 @@ class KasirPage extends Page
                     $transactionItem->quantity = $item['quantity'];
                     $transactionItem->price = $item['price'];
                     $transactionItem->subtotal = $item['price'] * $item['quantity'];
-                    $transactionItem->waktu = now();
+                    $transactionItem->waktu = $transactionTime;
                     $transactionItem->save();
                 }
 
@@ -279,7 +284,7 @@ class KasirPage extends Page
                 }
 
                 $transaction->nilai = $total;
-                $transaction->waktu = Carbon::now();
+                $transaction->waktu = $transactionTime;
                 $transaction->save();
 
                 // Simpan ke tabel transaction_items
@@ -292,7 +297,7 @@ class KasirPage extends Page
                     $transactionItem->quantity = $item['quantity'];
                     $transactionItem->price = $item['price'];
                     $transactionItem->subtotal = $item['price'] * $item['quantity'];
-                    $transactionItem->waktu = now();
+                    $transactionItem->waktu = $transactionTime;
                     $transactionItem->save();
                 }
 
@@ -312,7 +317,7 @@ class KasirPage extends Page
                 $receiptData = [
                     'items' => $this->cartItems,
                     'total' => $total,
-                    'transaction_date' => Carbon::now()->format('d-m-Y H:i:s'),
+                    'transaction_date' => $transactionTime->format('d-m-Y H:i:s'),
                     'transaction_id' => $transaction->id ?? ($piutang->id ?? 'N/A'),
                     'payment_method' => CashInOutType::find($data['type_id'])->name ?? 'N/A',
                     'is_receivable' => isset($data['is_receivable']) && $data['is_receivable'],
