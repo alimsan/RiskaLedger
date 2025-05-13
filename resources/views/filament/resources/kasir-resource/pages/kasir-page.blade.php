@@ -1,4 +1,118 @@
-<x-filament::page>
+<x-filament::page x-data="checkoutFunctions">
+    <style>
+        /* Style sederhana untuk toggle switch */
+        .simple-toggle {
+            position: relative;
+            display: inline-block;
+            width: 46px;
+            height: 24px;
+        }
+
+        .simple-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .simple-toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .simple-toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        .simple-toggle input:checked + .simple-toggle-slider {
+            background-color: #f59e0b;
+        }
+
+        .simple-toggle input:checked + .simple-toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        /* Style untuk Tom Select */
+        .tom-select-container .ts-control {
+            border-radius: 0.375rem;
+            min-height: 38px;
+            padding: 0.375rem 0.75rem;
+            background-color: inherit;
+        }
+
+        .tom-select-container .ts-dropdown {
+            max-width: 100%;
+            width: 100%;
+            z-index: 1000;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-top: 2px;
+        }
+
+        .tom-select-container .ts-dropdown-header {
+            padding: 6px 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .tom-select-container .ts-dropdown-input {
+            padding: 8px;
+            width: 100%;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .tom-select-container .ts-dropdown .option {
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+
+        .tom-select-container .ts-dropdown .option:hover,
+        .tom-select-container .ts-dropdown .active {
+            background-color: #f3f4f6;
+        }
+
+        .dark .tom-select-container .ts-control,
+        .dark .tom-select-container .ts-dropdown {
+            background-color: #1f2937;
+            color: white;
+            border-color: #374151;
+        }
+
+        .dark .tom-select-container .ts-dropdown-header {
+            border-color: #374151;
+        }
+
+        .dark .tom-select-container .ts-dropdown-input {
+            background-color: #1f2937;
+            color: white;
+            border-color: #374151;
+        }
+
+        .dark .tom-select-container .ts-dropdown .active {
+            background-color: #2d3748;
+            color: white;
+        }
+
+        .dark .tom-select-container .ts-dropdown .option:hover {
+            background-color: #374151;
+        }
+    </style>
+
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <!-- Panel Produk -->
         <div class="md:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-300 dark:border-gray-700 p-4">
@@ -147,7 +261,7 @@
                         </button>
 
                         <button
-                            onclick="openCheckoutModal()"
+                            x-on:click="$dispatch('open-modal', { id: 'checkout-modal' })"
                             class="inline-flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -169,267 +283,299 @@
         </div>
     </div>
 
-    <!-- Modal Checkout -->
-    <div
-        id="checkoutModal"
-        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden"
-    >
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-medium text-gray-900 dark:text-white">Pembayaran</h3>
-                <button
-                    onclick="closeCheckoutModal()"
-                    class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+    <!-- Modal Checkout (Menggunakan x-filament::modal) -->
+    <x-filament::modal id="checkout-modal" width="md" x-on:open-modal.window="initCheckoutForm()">
+        <x-slot name="header">
+            <h2 class="font-bold text-lg">Pembayaran</h2>
+        </x-slot>
+
+        <div class="space-y-4 px-2">
+            <div>
+                <label for="payment_method" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Metode Pembayaran
+                </label>
+                <select
+                    id="payment_method"
+                    class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
+                    @foreach($this->incomeTypes as $type)
+                        <option value="{{ $type->id }}">{{ $type->name }}</option>
+                    @endforeach
+                </select>
             </div>
 
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Pilih metode pembayaran dan selesaikan transaksi
-            </p>
-
-            <form id="checkoutForm">
-                <div class="space-y-4">
-                    <div>
-                        <label for="payment_method" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Metode Pembayaran
-                        </label>
-                        <select
-                            id="payment_method"
-                            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
-                        >
-                            @foreach($this->incomeTypes as $type)
-                                <option value="{{ $type->id }}">{{ $type->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div style="padding: 10px 0; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e5e7eb;">
-                        <span style="font-size: 14px; color: #aaa37d;">Catat sebagai Piutang</span>
-                        <label class="switch" style="position: relative; display: inline-block; width: 50px; height: 24px;">
-                            <input type="checkbox" id="is_piutang" onchange="toggleVendorSelect()" style="opacity: 0; width: 0; height: 0;">
-                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; -webkit-transition: .4s; transition: .4s; border-radius: 24px;">
-                                <span class="knob" style="position: absolute; content: ''; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; -webkit-transition: .4s; transition: .4s; border-radius: 50%;"></span>
-                            </span>
-                        </label>
-                    </div>
-
-                    <div style="padding: 10px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb;">
-                        <span style="font-size: 14px; color: #aaa37d;">Unduh Nota</span>
-                        <label class="switch" style="position: relative; display: inline-block; width: 50px; height: 24px;">
-                            <input type="checkbox" id="download_receipt" style="opacity: 0; width: 0; height: 0;">
-                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; -webkit-transition: .4s; transition: .4s; border-radius: 24px;">
-                                <span class="knob" style="position: absolute; content: ''; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; -webkit-transition: .4s; transition: .4s; border-radius: 50%;"></span>
-                            </span>
-                        </label>
-                    </div>
-
-                    <div style="padding: 10px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb;">
-                        <span style="font-size: 14px; color: #aaa37d;">Tambah Informasi Pembeli</span>
-                        <label class="switch" style="position: relative; display: inline-block; width: 50px; height: 24px;">
-                            <input type="checkbox" id="add_buyer_info" onchange="toggleBuyerInfo()" style="opacity: 0; width: 0; height: 0;">
-                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; -webkit-transition: .4s; transition: .4s; border-radius: 24px;">
-                                <span class="knob" style="position: absolute; content: ''; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; -webkit-transition: .4s; transition: .4s; border-radius: 50%;"></span>
-                            </span>
-                        </label>
-                    </div>
-
-                    <div style="padding: 10px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb;">
-                        <span style="font-size: 14px; color: #aaa37d;">Atur Waktu Transaksi</span>
-                        <label class="switch" style="position: relative; display: inline-block; width: 50px; height: 24px;">
-                            <input type="checkbox" id="custom_time" onchange="toggleCustomTime()" style="opacity: 0; width: 0; height: 0;">
-                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; -webkit-transition: .4s; transition: .4s; border-radius: 24px;">
-                                <span class="knob" style="position: absolute; content: ''; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; -webkit-transition: .4s; transition: .4s; border-radius: 50%;"></span>
-                            </span>
-                        </label>
-                    </div>
-
-                    <div id="custom_time_container" class="mt-3 hidden">
-                        <label for="transaction_time" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Waktu Transaksi
-                        </label>
-                        <input
-                            type="datetime-local"
-                            id="transaction_time"
-                            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
-                        >
-                    </div>
-
-                    <div id="buyer_info_container" class="mt-3 hidden">
-                        <div class="mb-3">
-                            <label for="buyer_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Pembeli
-                            </label>
-                            <input
-                                type="text"
-                                id="buyer_name"
-                                placeholder="Masukkan nama pembeli"
-                                class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
-                            >
-                        </div>
-
-                        <div>
-                            <label for="cashier_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Kasir
-                            </label>
-                            <input
-                                type="text"
-                                id="cashier_name"
-                                value="{{ auth()->user()->name ?? '' }}"
-                                readonly
-                                class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm bg-gray-100 dark:bg-gray-700"
-                            >
-                        </div>
-                    </div>
-
-                    <div id="vendor_select_container" class="mt-3 hidden">
-                        <label for="vendor_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Pilih Vendor
-                        </label>
-                        <select
-                            id="vendor_id"
-                            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
-                        >
-                            <option value="">-- Pilih Vendor --</option>
-                            @foreach($this->vendors as $vendor)
-                                <option value="{{ $vendor->id }}">{{ $vendor->nama_vendor }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Total Pembayaran
-                        </label>
-                        <div class="mt-1 text-lg font-bold text-gray-900 dark:text-white">
-                            {{ 'Rp ' . number_format($this->cartTotal, 0, ',', '.') }}
-                        </div>
-                    </div>
-
-                    <div class="hidden">
-                        <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Catatan
-                        </label>
-                        <textarea
-                            id="notes"
-                            placeholder="Tambahkan catatan untuk transaksi ini (opsional)"
-                            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
-                        ></textarea>
-                    </div>
+            <div class="flex justify-between items-center py-2 border-t border-b border-gray-200 dark:border-gray-700">
+                <span class="text-sm text-gray-600 dark:text-gray-400">Catat sebagai Piutang</span>
+                <div class="flex items-center justify-center">
+                    <label class="simple-toggle">
+                        <input id="is_piutang" type="checkbox" x-on:change="toggleVendorSelect()">
+                        <span class="simple-toggle-slider"></span>
+                    </label>
                 </div>
+            </div>
 
-                <div class="mt-6">
-                    <button
-                        type="button"
-                        onclick="submitCheckout()"
-                        class="w-full flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                <span class="text-sm text-gray-600 dark:text-gray-400">Unduh Nota</span>
+                <div class="flex items-center justify-center">
+                    <label class="simple-toggle">
+                        <input id="download_receipt" type="checkbox">
+                        <span class="simple-toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                <span class="text-sm text-gray-600 dark:text-gray-400">Tambah Informasi Pembeli</span>
+                <div class="flex items-center justify-center">
+                    <label class="simple-toggle">
+                        <input id="add_buyer_info" type="checkbox" x-on:change="toggleBuyerInfo()">
+                        <span class="simple-toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                <span class="text-sm text-gray-600 dark:text-gray-400">Atur Waktu Transaksi</span>
+                <div class="flex items-center justify-center">
+                    <label class="simple-toggle">
+                        <input id="custom_time" type="checkbox" x-on:change="toggleCustomTime()">
+                        <span class="simple-toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="custom_time_container" class="mt-3 hidden">
+                <label for="transaction_time" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Waktu Transaksi
+                </label>
+                <input
+                    type="datetime-local"
+                    id="transaction_time"
+                    class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
+                >
+            </div>
+
+            <div id="buyer_info_container" class="mt-3 hidden">
+                <div class="mb-3">
+                    <label for="buyer_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Pembeli
+                    </label>
+                    <input
+                        type="text"
+                        id="buyer_name"
+                        placeholder="Masukkan nama pembeli"
+                        class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
                     >
-                        Proses Transaksi
-                    </button>
                 </div>
-            </form>
+
+                <div>
+                    <label for="cashier_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Kasir
+                    </label>
+                    <input
+                        type="text"
+                        id="cashier_name"
+                        value="{{ auth()->user()->name ?? '' }}"
+                        readonly
+                        class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm bg-gray-100 dark:bg-gray-700"
+                    >
+                </div>
+            </div>
+
+            <div id="vendor_select_container" class="mt-3 hidden">
+                <label for="vendor_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Pilih Vendor
+                </label>
+                <div class="tom-select-container mt-1">
+                    <select
+                        id="vendor_id"
+                        class="tom-select w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
+                        autocomplete="off"
+                    >
+                        <option value="">-- Pilih Vendor --</option>
+                        @foreach($this->vendors as $vendor)
+                            <option value="{{ $vendor->id }}">{{ $vendor->nama_vendor }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Total Pembayaran
+                </label>
+                <div class="mt-1 text-lg font-bold text-gray-900 dark:text-white">
+                    {{ 'Rp ' . number_format($this->cartTotal, 0, ',', '.') }}
+                </div>
+            </div>
+
+            <div class="hidden">
+                <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Catatan
+                </label>
+                <textarea
+                    id="notes"
+                    placeholder="Tambahkan catatan untuk transaksi ini (opsional)"
+                    class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
+                ></textarea>
+            </div>
         </div>
-    </div>
+
+        <x-slot name="footer">
+            <div class="flex justify-end gap-x-4">
+                <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'checkout-modal' })">
+                    Batal
+                </x-filament::button>
+                <x-filament::button color="primary" x-on:click="submitCheckout()">
+                    Proses Transaksi
+                </x-filament::button>
+            </div>
+        </x-slot>
+    </x-filament::modal>
 
     <script>
-        function openCheckoutModal() {
-            document.getElementById('checkoutModal').classList.remove('hidden');
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('checkoutFunctions', () => ({
+                initCheckoutForm() {
+                    // Reset checkbox values to false
+                    document.getElementById('is_piutang').checked = false;
+                    document.getElementById('download_receipt').checked = false;
+                    document.getElementById('add_buyer_info').checked = false;
+                    document.getElementById('custom_time').checked = false;
 
-            // Reset checkbox values to false when opening modal
-            document.getElementById('is_piutang').checked = false;
-            document.getElementById('download_receipt').checked = false;
-            document.getElementById('add_buyer_info').checked = false;
-            document.getElementById('custom_time').checked = false;
+                    // Set nilai default datetime-local ke waktu sekarang
+                    const now = new Date();
+                    // Format tanggal untuk input datetime-local (YYYY-MM-DDThh:mm)
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const day = String(now.getDate()).padStart(2, '0');
+                    const hours = String(now.getHours()).padStart(2, '0');
+                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                    const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}`;
 
-            // Set nilai default datetime-local ke waktu sekarang
-            const now = new Date();
-            // Format tanggal untuk input datetime-local (YYYY-MM-DDThh:mm)
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}`;
+                    document.getElementById('transaction_time').value = formattedDate;
 
-            document.getElementById('transaction_time').value = formattedDate;
+                    // Hide containers initially
+                    document.getElementById('vendor_select_container').classList.add('hidden');
+                    document.getElementById('buyer_info_container').classList.add('hidden');
+                    document.getElementById('custom_time_container').classList.add('hidden');
 
-            // Hide vendor selection initially
-            document.getElementById('vendor_select_container').classList.add('hidden');
-            document.getElementById('buyer_info_container').classList.add('hidden');
-            document.getElementById('custom_time_container').classList.add('hidden');
-        }
+                    // Inisialisasi Tom Select pada vendor select
+                    setTimeout(() => {
+                        // Cek apakah Tom Select sudah terinisialisasi
+                        if (!document.querySelector('#vendor_id').tomselect) {
+                            const tomSelectConfig = {
+                                placeholder: 'Cari vendor...',
+                                allowEmptyOption: true,
+                                searchField: ['text'],
+                                plugins: {
+                                    'clear_button': {},
+                                    'dropdown_input': {}
+                                },
+                                create: false,
+                                createOnBlur: false,
+                                openOnFocus: true,
+                                persist: false,
+                                maxOptions: null,
+                                hideSelected: true,
+                                closeAfterSelect: true,
+                                copyClassesToDropdown: false
+                            };
 
-        function closeCheckoutModal() {
-            document.getElementById('checkoutModal').classList.add('hidden');
-        }
+                            const vendorSelect = new TomSelect('#vendor_id', tomSelectConfig);
 
-        function toggleVendorSelect() {
-            const isPiutang = document.getElementById('is_piutang').checked;
-            document.getElementById('vendor_select_container').classList.toggle('hidden', !isPiutang);
-        }
+                            // Tambahkan kelas untuk styling
+                            vendorSelect.control.classList.add('tom-select-control');
 
-        function toggleBuyerInfo() {
-            const addBuyerInfo = document.getElementById('add_buyer_info').checked;
-            document.getElementById('buyer_info_container').classList.toggle('hidden', !addBuyerInfo);
-        }
+                            // Fokus pada input pencarian saat dropdown dibuka
+                            vendorSelect.on('dropdown_open', function() {
+                                setTimeout(() => {
+                                    const searchInput = document.querySelector('.ts-dropdown-input');
+                                    if (searchInput) {
+                                        searchInput.focus();
+                                    }
+                                }, 50);
+                            });
+                        } else {
+                            // Jika sudah terinisialisasi, reset saja nilainya
+                            document.querySelector('#vendor_id').tomselect.clear();
+                        }
+                    }, 100);
+                },
 
-        function toggleCustomTime() {
-            const customTime = document.getElementById('custom_time').checked;
-            document.getElementById('custom_time_container').classList.toggle('hidden', !customTime);
-        }
+                toggleVendorSelect() {
+                    const isPiutang = document.getElementById('is_piutang').checked;
+                    document.getElementById('vendor_select_container').classList.toggle('hidden', !isPiutang);
+                },
 
-        function submitCheckout() {
-            const typeId = document.getElementById('payment_method').value;
-            const notes = document.getElementById('notes').value;
-            const isPiutang = document.getElementById('is_piutang').checked;
-            const vendorId = isPiutang ? document.getElementById('vendor_id').value : null;
-            const downloadReceipt = document.getElementById('download_receipt').checked;
-            const addBuyerInfo = document.getElementById('add_buyer_info').checked;
-            const buyerName = addBuyerInfo ? document.getElementById('buyer_name').value : null;
-            const cashierName = addBuyerInfo ? document.getElementById('cashier_name').value : null;
-            const customTime = document.getElementById('custom_time').checked;
-            const transactionTime = customTime ? document.getElementById('transaction_time').value : null;
+                toggleBuyerInfo() {
+                    const addBuyerInfo = document.getElementById('add_buyer_info').checked;
+                    document.getElementById('buyer_info_container').classList.toggle('hidden', !addBuyerInfo);
+                },
 
-            // Validasi jika pilihan vendor kosong
-            if (isPiutang && !vendorId) {
-                alert('Silakan pilih vendor terlebih dahulu');
-                return;
-            }
+                toggleCustomTime() {
+                    const customTime = document.getElementById('custom_time').checked;
+                    document.getElementById('custom_time_container').classList.toggle('hidden', !customTime);
+                },
 
-            // Panggil method Livewire untuk proses checkout
-            @this.checkout({
-                type_id: typeId,
-                notes: notes,
-                is_receivable: isPiutang,
-                vendor_id: vendorId,
-                download_receipt: downloadReceipt,
-                buyer_name: buyerName,
-                cashier_name: cashierName,
-                transaction_time: transactionTime
-            });
-        }
+                toggleDownloadReceipt() {
+                    // Function ini hanya untuk menjaga konsistensi, tidak ada yang perlu dilakukan
+                },
+
+                submitCheckout() {
+                    const typeId = document.getElementById('payment_method').value;
+                    const notes = document.getElementById('notes').value;
+                    const isPiutang = document.getElementById('is_piutang').checked;
+
+                    // Mengambil nilai vendor_id dari tomselect
+                    let vendorId = null;
+                    if (isPiutang) {
+                        // Cek apakah ada TomSelect instance
+                        if (document.querySelector('#vendor_id').tomselect) {
+                            vendorId = document.querySelector('#vendor_id').tomselect.getValue();
+                        } else {
+                            vendorId = document.getElementById('vendor_id').value;
+                        }
+                    }
+
+                    const downloadReceipt = document.getElementById('download_receipt').checked;
+                    const addBuyerInfo = document.getElementById('add_buyer_info').checked;
+                    const buyerName = addBuyerInfo ? document.getElementById('buyer_name').value : null;
+                    const cashierName = addBuyerInfo ? document.getElementById('cashier_name').value : null;
+                    const customTime = document.getElementById('custom_time').checked;
+                    const transactionTime = customTime ? document.getElementById('transaction_time').value : null;
+
+                    // Validasi jika pilihan vendor kosong
+                    if (isPiutang && !vendorId) {
+                        alert('Silakan pilih vendor terlebih dahulu');
+                        return;
+                    }
+
+                    // Panggil method Livewire untuk proses checkout
+                    @this.checkout({
+                        type_id: typeId,
+                        notes: notes,
+                        is_receivable: isPiutang,
+                        vendor_id: vendorId,
+                        download_receipt: downloadReceipt,
+                        buyer_name: buyerName,
+                        cashier_name: cashierName,
+                        transaction_time: transactionTime
+                    });
+                }
+            }));
+        });
 
         // Menangani event 'close-checkout-modal'
         document.addEventListener('DOMContentLoaded', function() {
             window.addEventListener('close-checkout-modal', function() {
-                closeCheckoutModal();
+                Livewire.dispatch('close-modal', { id: 'checkout-modal' });
             });
+
+            // Pastikan semua library TomSelect sudah dimuat dengan benar
+            if (typeof TomSelect === 'undefined') {
+                console.error('TomSelect tidak tersedia. Pastikan library sudah dimuat.');
+            }
         });
     </script>
-
-    <style>
-        /* Custom styles for toggle switches */
-        .switch input:checked + .slider {
-            background-color: #f59e0b;
-        }
-
-        .switch input:checked + .slider .knob {
-            -webkit-transform: translateX(26px);
-            -ms-transform: translateX(26px);
-            transform: translateX(26px);
-        }
-    </style>
 </x-filament::page>

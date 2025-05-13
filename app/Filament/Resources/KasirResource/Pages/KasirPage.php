@@ -334,6 +334,7 @@ class KasirPage extends Page
 
             // Tutup modal
             $this->dispatch('close-checkout-modal');
+            $this->dispatch('close-modal', id: 'checkout-modal');
 
         } catch (\Exception $e) {
             // Rollback transaksi
