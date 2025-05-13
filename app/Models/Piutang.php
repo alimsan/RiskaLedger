@@ -32,6 +32,21 @@ class Piutang extends Model
     ];
 
     /**
+     * Boot the model.
+     *
+     * @return void
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function($piutang) {
+            // Menghapus semua transaction_items terkait
+            $piutang->transactionItems()->delete();
+        });
+    }
+
+    /**
      * Get the tenant that owns the piutang.
      */
     public function tenant()
@@ -53,6 +68,14 @@ class Piutang extends Model
     public function type()
     {
         return $this->belongsTo(CashInOutType::class, 'type_id');
+    }
+
+    /**
+     * Get the transaction items for the piutang.
+     */
+    public function transactionItems()
+    {
+        return $this->hasMany(TransactionItems::class, 'transaction_id', 'id');
     }
 
     /**
