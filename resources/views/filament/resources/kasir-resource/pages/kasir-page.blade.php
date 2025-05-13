@@ -45,72 +45,6 @@
         .simple-toggle input:checked + .simple-toggle-slider:before {
             transform: translateX(22px);
         }
-
-        /* Style untuk Tom Select */
-        .tom-select-container .ts-control {
-            border-radius: 0.375rem;
-            min-height: 38px;
-            padding: 0.375rem 0.75rem;
-            background-color: inherit;
-        }
-
-        .tom-select-container .ts-dropdown {
-            max-width: 100%;
-            width: 100%;
-            z-index: 1000;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            margin-top: 2px;
-        }
-
-        .tom-select-container .ts-dropdown-header {
-            padding: 6px 10px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .tom-select-container .ts-dropdown-input {
-            padding: 8px;
-            width: 100%;
-            border: 1px solid #e2e8f0;
-            border-radius: 4px;
-            font-size: 14px;
-            outline: none;
-        }
-
-        .tom-select-container .ts-dropdown .option {
-            padding: 8px 12px;
-            cursor: pointer;
-        }
-
-        .tom-select-container .ts-dropdown .option:hover,
-        .tom-select-container .ts-dropdown .active {
-            background-color: #f3f4f6;
-        }
-
-        .dark .tom-select-container .ts-control,
-        .dark .tom-select-container .ts-dropdown {
-            background-color: #1f2937;
-            color: white;
-            border-color: #374151;
-        }
-
-        .dark .tom-select-container .ts-dropdown-header {
-            border-color: #374151;
-        }
-
-        .dark .tom-select-container .ts-dropdown-input {
-            background-color: #1f2937;
-            color: white;
-            border-color: #374151;
-        }
-
-        .dark .tom-select-container .ts-dropdown .active {
-            background-color: #2d3748;
-            color: white;
-        }
-
-        .dark .tom-select-container .ts-dropdown .option:hover {
-            background-color: #374151;
-        }
     </style>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -383,21 +317,43 @@
             </div>
 
             <div id="vendor_select_container" class="mt-3 hidden">
-                <label for="vendor_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label for="vendor_search" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Pilih Vendor
                 </label>
-                <div class="tom-select-container mt-1">
+                <div class="mt-1 relative">
+                    <input
+                        type="text"
+                        id="vendor_search"
+                        placeholder="Cari vendor..."
+                        class="block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
                     <select
                         id="vendor_id"
-                        class="tom-select w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
-                        autocomplete="off"
+                        class="hidden"
                     >
                         <option value="">-- Pilih Vendor --</option>
                         @foreach($this->vendors as $vendor)
                             <option value="{{ $vendor->id }}">{{ $vendor->nama_vendor }}</option>
                         @endforeach
                     </select>
+                    <div id="vendor_dropdown" class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg max-h-56 rounded-md py-1 text-base overflow-auto focus:outline-none sm:text-sm hidden">
+                        <div class="sticky top-0 cursor-default select-none relative py-2 px-4 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                            -- Pilih Vendor --
+                        </div>
+                        @foreach($this->vendors as $vendor)
+                            <div
+                                data-value="{{ $vendor->id }}"
+                                data-text="{{ $vendor->nama_vendor }}"
+                                class="vendor-option cursor-pointer select-none relative py-2 px-4 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                                {{ $vendor->nama_vendor }}
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
+                <input type="hidden" id="selected_vendor_id" name="selected_vendor_id" value="">
             </div>
 
             <div>
@@ -460,47 +416,138 @@
                     document.getElementById('buyer_info_container').classList.add('hidden');
                     document.getElementById('custom_time_container').classList.add('hidden');
 
-                    // Inisialisasi Tom Select pada vendor select
-                    setTimeout(() => {
-                        // Cek apakah Tom Select sudah terinisialisasi
-                        if (!document.querySelector('#vendor_id').tomselect) {
-                            const tomSelectConfig = {
-                                placeholder: 'Cari vendor...',
-                                allowEmptyOption: true,
-                                searchField: ['text'],
-                                plugins: {
-                                    'clear_button': {},
-                                    'dropdown_input': {}
-                                },
-                                create: false,
-                                createOnBlur: false,
-                                openOnFocus: true,
-                                persist: false,
-                                maxOptions: null,
-                                hideSelected: true,
-                                closeAfterSelect: true,
-                                copyClassesToDropdown: false
-                            };
+                    // Clear vendor search field
+                    if (document.getElementById('vendor_search')) {
+                        document.getElementById('vendor_search').value = '';
+                        document.getElementById('selected_vendor_id').value = '';
+                    }
 
-                            const vendorSelect = new TomSelect('#vendor_id', tomSelectConfig);
+                    // Setup vendor search functionality
+                    this.setupVendorSearch();
+                },
 
-                            // Tambahkan kelas untuk styling
-                            vendorSelect.control.classList.add('tom-select-control');
+                setupVendorSearch() {
+                    const searchInput = document.getElementById('vendor_search');
+                    const dropdown = document.getElementById('vendor_dropdown');
+                    const vendorOptions = document.querySelectorAll('.vendor-option');
+                    const hiddenInput = document.getElementById('selected_vendor_id');
 
-                            // Fokus pada input pencarian saat dropdown dibuka
-                            vendorSelect.on('dropdown_open', function() {
-                                setTimeout(() => {
-                                    const searchInput = document.querySelector('.ts-dropdown-input');
-                                    if (searchInput) {
-                                        searchInput.focus();
-                                    }
-                                }, 50);
-                            });
-                        } else {
-                            // Jika sudah terinisialisasi, reset saja nilainya
-                            document.querySelector('#vendor_id').tomselect.clear();
+                    if (!searchInput || !dropdown || !vendorOptions.length) return;
+
+                    let activeIndex = -1;
+
+                    // Function to highlight active option
+                    const setActiveOption = (index) => {
+                        vendorOptions.forEach(opt => opt.classList.remove('bg-gray-100', 'dark:bg-gray-700'));
+                        if (index >= 0 && index < vendorOptions.length) {
+                            const visibleOptions = Array.from(vendorOptions).filter(opt => !opt.classList.contains('hidden'));
+                            if (visibleOptions[index]) {
+                                visibleOptions[index].classList.add('bg-gray-100', 'dark:bg-gray-700');
+                                visibleOptions[index].scrollIntoView({ block: 'nearest' });
+                                activeIndex = index;
+                            }
                         }
-                    }, 100);
+                    };
+
+                    // Show dropdown when input is focused
+                    searchInput.addEventListener('focus', () => {
+                        dropdown.classList.remove('hidden');
+                        // Show all options initially
+                        vendorOptions.forEach(option => {
+                            option.classList.remove('hidden');
+                        });
+                    });
+
+                    // Keep dropdown open during typing
+                    searchInput.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        dropdown.classList.remove('hidden');
+                    });
+
+                    // Hide dropdown when clicking outside
+                    document.addEventListener('click', (e) => {
+                        if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                            dropdown.classList.add('hidden');
+                            activeIndex = -1;
+                        }
+                    });
+
+                    // Keyboard navigation
+                    searchInput.addEventListener('keydown', (e) => {
+                        const visibleOptions = Array.from(vendorOptions).filter(opt => !opt.classList.contains('hidden'));
+
+                        if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            dropdown.classList.remove('hidden');
+                            activeIndex = Math.min(activeIndex + 1, visibleOptions.length - 1);
+                            setActiveOption(activeIndex);
+                        } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            dropdown.classList.remove('hidden');
+                            activeIndex = Math.max(activeIndex - 1, 0);
+                            setActiveOption(activeIndex);
+                        } else if (e.key === 'Enter' && activeIndex >= 0) {
+                            e.preventDefault();
+                            if (visibleOptions[activeIndex]) {
+                                const value = visibleOptions[activeIndex].dataset.value;
+                                const text = visibleOptions[activeIndex].dataset.text;
+
+                                searchInput.value = text;
+                                hiddenInput.value = value;
+                                dropdown.classList.add('hidden');
+                                activeIndex = -1;
+                            }
+                        } else if (e.key === 'Escape') {
+                            dropdown.classList.add('hidden');
+                            activeIndex = -1;
+                        }
+                    });
+
+                    // Live search functionality
+                    searchInput.addEventListener('input', () => {
+                        const searchValue = searchInput.value.toLowerCase().trim();
+                        let hasVisibleOptions = false;
+
+                        dropdown.classList.remove('hidden'); // Keep dropdown visible during search
+                        activeIndex = -1; // Reset active index when searching
+
+                        vendorOptions.forEach(option => {
+                            const text = option.innerText.toLowerCase();
+                            if (text.includes(searchValue)) {
+                                option.classList.remove('hidden');
+                                hasVisibleOptions = true;
+                            } else {
+                                option.classList.add('hidden');
+                            }
+                        });
+
+                        // Show no results message if needed
+                        let noResultsEl = dropdown.querySelector('.no-results');
+                        if (!hasVisibleOptions) {
+                            if (!noResultsEl) {
+                                noResultsEl = document.createElement('div');
+                                noResultsEl.className = 'no-results cursor-default select-none relative py-2 px-4 text-gray-500 dark:text-gray-400';
+                                noResultsEl.textContent = 'Tidak ada hasil yang cocok';
+                                dropdown.appendChild(noResultsEl);
+                            }
+                            noResultsEl.classList.remove('hidden');
+                        } else if (noResultsEl) {
+                            noResultsEl.classList.add('hidden');
+                        }
+                    });
+
+                    // Select vendor when clicking on option
+                    vendorOptions.forEach(option => {
+                        option.addEventListener('click', () => {
+                            const value = option.dataset.value;
+                            const text = option.dataset.text;
+
+                            searchInput.value = text;
+                            hiddenInput.value = value;
+                            dropdown.classList.add('hidden');
+                            activeIndex = -1;
+                        });
+                    });
                 },
 
                 toggleVendorSelect() {
@@ -527,15 +574,10 @@
                     const notes = document.getElementById('notes').value;
                     const isPiutang = document.getElementById('is_piutang').checked;
 
-                    // Mengambil nilai vendor_id dari tomselect
+                    // Mengambil nilai vendor_id dari input tersembunyi
                     let vendorId = null;
                     if (isPiutang) {
-                        // Cek apakah ada TomSelect instance
-                        if (document.querySelector('#vendor_id').tomselect) {
-                            vendorId = document.querySelector('#vendor_id').tomselect.getValue();
-                        } else {
-                            vendorId = document.getElementById('vendor_id').value;
-                        }
+                        vendorId = document.getElementById('selected_vendor_id').value;
                     }
 
                     const downloadReceipt = document.getElementById('download_receipt').checked;
@@ -571,11 +613,6 @@
             window.addEventListener('close-checkout-modal', function() {
                 Livewire.dispatch('close-modal', { id: 'checkout-modal' });
             });
-
-            // Pastikan semua library TomSelect sudah dimuat dengan benar
-            if (typeof TomSelect === 'undefined') {
-                console.error('TomSelect tidak tersedia. Pastikan library sudah dimuat.');
-            }
         });
     </script>
 </x-filament::page>
