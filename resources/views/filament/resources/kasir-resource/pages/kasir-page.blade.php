@@ -195,7 +195,7 @@
                         </button>
 
                         <button
-                            x-on:click="$dispatch('open-modal', { id: 'checkout-modal' })"
+                            onclick="refreshBeforeCheckout()"
                             class="inline-flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -613,6 +613,33 @@
             window.addEventListener('close-checkout-modal', function() {
                 Livewire.dispatch('close-modal', { id: 'checkout-modal' });
             });
+        });
+
+        // Fungsi untuk refresh halaman baru kemudian buka modal checkout
+        function refreshBeforeCheckout() {
+            // Jika halaman belum di-refresh, refresh dulu lalu tandai untuk buka modal
+            if (!sessionStorage.getItem('freshCheckout')) {
+                console.log('Refreshing for checkout...');
+                sessionStorage.setItem('freshCheckout', 'true');
+                window.location.reload();
+                return;
+            }
+
+            // Jika sudah di-refresh, buka modal dan hapus flag
+            console.log('Opening checkout modal after fresh page load');
+            sessionStorage.removeItem('freshCheckout');
+            Livewire.dispatch('open-modal', { id: 'checkout-modal' });
+        }
+
+        // Cek apakah perlu buka modal saat halaman load
+        document.addEventListener('DOMContentLoaded', function() {
+            if (sessionStorage.getItem('freshCheckout') === 'true') {
+                // Tunggu sebentar agar halaman selesai load dengan sempurna
+                setTimeout(function() {
+                    console.log('Auto-opening checkout modal');
+                    refreshBeforeCheckout();
+                }, 500);
+            }
         });
     </script>
 </x-filament::page>
