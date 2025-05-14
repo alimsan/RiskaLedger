@@ -41,7 +41,11 @@ class PiutangResource extends Resource
     }
     public static function canCreate(): bool
     {
-        return auth()->user()->hasRole(['admin', 'superadmin','manager']);
+        return auth()->user()->hasRole(['admin', 'superadmin']);
+    }
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()->hasRole(['admin', 'superadmin']);
     }
     public static function canDeleteAny(): bool
     {
