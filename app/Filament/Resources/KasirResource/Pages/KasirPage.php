@@ -379,4 +379,81 @@ class KasirPage extends Page
     {
         return [];
     }
+    
+    /**
+     * Menyimpan data keranjang ke session untuk keperluan print thermal
+     * 
+     * @param string|null $typeId
+     * @param bool|null $isPiutang
+     * @param string|null $vendorId
+     * @param string|null $notes
+     * @param string|null $buyerName
+     * @param string|null $cashierName
+     * @param string|null $transactionTime
+     * @return array
+     */
+    public function saveCartForPrinting($typeId = null, $isPiutang = false, $vendorId = null, $notes = null, $buyerName = null, $cashierName = null, $transactionTime = null)
+    {
+        // Format data items
+        $items = [];
+        $total = 0;
+        
+        foreach ($this->cartItems as $item) {
+            $items[] = [
+                'name' => $item['name'],
+                'quantity' => $item['quantity'],
+                'price' => $item['price']
+            ];
+            
+            $total += $item['price'] * $item['quantity'];
+        }
+        
+        // Ambil nama metode pembayaran jika $typeId disediakan
+        $paymentMethod = 'Tunai';
+        if ($typeId) {
+            $paymentType = \App\Models\CashInOutType::find($typeId);
+            if ($paymentType) {
+                $paymentMethod = $paymentType->name;
+            }
+        }
+        
+        // Ambil nama vendor jika $vendorId disediakan dan transaksi adalah piutang
+        $vendorName = null;
+        if ($isPiutang && $vendorId) {
+            $vendor = \App\Models\Vendor::find($vendorId);
+            if ($vendor) {
+                $vendorName = $vendor->name;
+            }
+        }
+        
+        // Format tanggal transaksi
+        $formattedDate = now()->format('d/m/Y H:i');
+        if ($transactionTime) {
+            try {
+                $dateTime = \Carbon\Carbon::parse($transactionTime);
+                $formattedDate = $dateTime->format('d/m/Y H:i');
+            } catch (\Exception $e) {
+                // Gunakan format default jika parsing gagal
+            }
+        }
+        
+        // Simpan data ke session
+        session([
+            'print_items' => $items,
+            'print_total' => $total,
+            'print_transaction_id' => 'TRX' . now()->format('YmdHis'),
+            'print_transaction_date' => $formattedDate,
+            'print_payment_method' => $paymentMethod,
+            'print_is_receivable' => $isPiutang,
+            'print_vendor_id' => $vendorId,
+            'print_vendor_name' => $vendorName,
+            'print_notes' => $notes,
+            'print_buyer_name' => $buyerName,
+            'print_cashier_name' => $cashierName ?? auth()->user()->name ?? 'Admin',
+            'print_custom_time' => !empty($transactionTime),
+            'print_add_buyer_info' => !empty($buyerName) || !empty($cashierName),
+        ]);
+        
+        return ['success' => true];
+    }
 }

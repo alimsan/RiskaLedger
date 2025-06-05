@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CashInOutDetailController;
 use App\Http\Controllers\TransactionItemsController;
+use App\Http\Controllers\TestPrinterController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -27,6 +28,11 @@ Route::get('/admin/transaction-items/detail', [TransactionItemsController::class
     ->middleware(['auth', 'verified'])
     ->name('transaction-items.detail');
 
+// Route untuk printer thermal
+Route::get('/admin/thermal-print/{id?}', [TestPrinterController::class, 'printThermal'])
+    ->middleware(['auth', 'verified'])
+    ->name('thermal-print');
+
 Route::get('/debug-auth', function() {
     return [
         'auth' => auth()->check(),
@@ -43,3 +49,6 @@ Route::get('/debug-middleware', function () {
         'action' => $route->getAction(),
     ];
 });
+
+// Tambahkan route berikut
+Route::get('/test-printer', [TestPrinterController::class, 'index'])->name('test-printer');

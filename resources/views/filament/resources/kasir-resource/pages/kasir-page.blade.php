@@ -258,6 +258,15 @@
                 </div>
             </div>
 
+            <div class="py-2 border-b border-gray-200 dark:border-gray-700">
+                <button type="button" id="print_thermal_btn" class="w-full flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    Print struk
+                </button>
+            </div>
+
             <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
                 <span class="text-sm text-gray-600 dark:text-gray-400">Tambah Informasi Pembeli</span>
                 <div class="flex items-center justify-center">
@@ -398,6 +407,9 @@
                     document.getElementById('download_receipt').checked = false;
                     document.getElementById('add_buyer_info').checked = false;
                     document.getElementById('custom_time').checked = false;
+
+                    // Setup thermal print button
+                    this.setupThermalPrintButton();
 
                     // Set nilai default datetime-local ke waktu sekarang
                     const now = new Date();
@@ -567,6 +579,67 @@
 
                 toggleDownloadReceipt() {
                     // Function ini hanya untuk menjaga konsistensi, tidak ada yang perlu dilakukan
+                },
+
+                setupThermalPrintButton() {
+                    const printBtn = document.getElementById('print_thermal_btn');
+                    if (!printBtn) return;
+
+                    printBtn.addEventListener('click', (e) => {
+                        // Mencegah form melakukan submit/refresh
+                        e.preventDefault();
+
+                        // Dapatkan data transaksi untuk dikirim ke halaman printer
+                        const typeId = document.getElementById('payment_method').value;
+                        const isPiutang = document.getElementById('is_piutang').checked;
+                        const vendorId = isPiutang ? document.getElementById('selected_vendor_id').value : null;
+                        const notes = document.getElementById('notes').value;
+
+                        // Data pembeli jika ada
+                        const addBuyerInfo = document.getElementById('add_buyer_info').checked;
+                        const buyerName = addBuyerInfo ? document.getElementById('buyer_name').value : null;
+                        const cashierName = addBuyerInfo ? document.getElementById('cashier_name').value : null;
+
+                        // Waktu transaksi
+                        const customTime = document.getElementById('custom_time').checked;
+                        const transactionTime = customTime ? document.getElementById('transaction_time').value : null;
+
+                        // Validasi jika pilihan vendor kosong untuk piutang
+                        if (isPiutang && !vendorId) {
+                            alert('Mohon pilih vendor terlebih dahulu untuk transaksi piutang');
+                            return;
+                        }
+
+                        // Validasi jika keranjang kosong
+                        if (!@json(count($this->cartItems))) {
+                            alert('Keranjang belanja kosong. Silakan tambahkan produk terlebih dahulu.');
+                            return;
+                        }
+
+                        // Kirim data cart melalui POST request ke server untuk disimpan di session
+                        @this.call('saveCartForPrinting', typeId, isPiutang, vendorId, notes, buyerName, cashierName, transactionTime).then(response => {
+                            // Setelah data disimpan di session, buka halaman thermal printer di tab baru
+                            const params = new URLSearchParams();
+                            params.append('session_data', 'true');
+                            params.append('type_id', typeId);
+                            params.append('is_piutang', isPiutang);
+                            if (vendorId) params.append('vendor_id', vendorId);
+                            if (notes) params.append('notes', notes);
+                            if (buyerName) params.append('buyer_name', buyerName);
+                            if (cashierName) params.append('cashier_name', cashierName);
+                            if (transactionTime) params.append('transaction_time', transactionTime);
+                            if (addBuyerInfo) params.append('add_buyer_info', addBuyerInfo);
+                            if (customTime) params.append('custom_time', customTime);
+
+                            // Buka halaman thermal printer di tab baru dan simpan referensi ke jendela baru
+                            const newTab = window.open(`{{ route('thermal-print') }}?${params.toString()}`, '_blank');
+
+                            // Jika newTab berhasil dibuka, fokus ke tab baru
+                            if (newTab) {
+                                newTab.focus();
+                            }
+                        });
+                    });
                 },
 
                 submitCheckout() {
