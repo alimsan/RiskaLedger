@@ -293,27 +293,28 @@ class CustomCashInOutTableResource extends Resource
             }
 
             // Tambahkan log untuk debugging
-            if ($isDebugDate) {
-                \Log::info("HASIL PERBAIKAN - Tanggal: " . $tanggal .
-                           ", Pendapatan: " . $totalPendapatanHariIni .
-                           ", Pengeluaran: " . $totalPengeluaranHariIni .
-                           ", tb1_jumlah: " . $data->tb1_jumlah);
-                \Log::info("VERIFIKASI - Penjualan: " . $data->penjualan . ", Total Pengeluaran (verifikasi): " . $totalPengeluaran);
+            if(env('APP_DEBUG', false)){
+                if ($isDebugDate) {
+                    \Log::info("HASIL PERBAIKAN - Tanggal: " . $tanggal .
+                               ", Pendapatan: " . $totalPendapatanHariIni .
+                               ", Pengeluaran: " . $totalPengeluaranHariIni .
+                               ", tb1_jumlah: " . $data->tb1_jumlah);
+                    \Log::info("VERIFIKASI - Penjualan: " . $data->penjualan . ", Total Pengeluaran (verifikasi): " . $totalPengeluaran);
 
-                if (empty($logItemPengeluaran)) {
-                    \Log::info("DETAIL PENGELUARAN - Tanggal: " . $tanggal . " - Tidak ada pengeluaran");
-                } else {
-                    \Log::info("DETAIL PENGELUARAN - Tanggal: " . $tanggal . ", Items: " . implode(", ", $logItemPengeluaran));
+                    if (empty($logItemPengeluaran)) {
+                        \Log::info("DETAIL PENGELUARAN - Tanggal: " . $tanggal . " - Tidak ada pengeluaran");
+                    } else {
+                        \Log::info("DETAIL PENGELUARAN - Tanggal: " . $tanggal . ", Items: " . implode(", ", $logItemPengeluaran));
+                    }
+
+                    // Log semua transaksi pada tanggal ini
+                    foreach ($debugInfo as $index => $info) {
+                        \Log::info("TRANSAKSI #{$index} - " . json_encode($info, JSON_PRETTY_PRINT));
+                    }
+
+                    \Log::info("======== SELESAI DEBUG TANGGAL 02-05-2025 ========");
                 }
-
-                // Log semua transaksi pada tanggal ini
-                foreach ($debugInfo as $index => $info) {
-                    \Log::info("TRANSAKSI #{$index} - " . json_encode($info, JSON_PRETTY_PRINT));
-                }
-
-                \Log::info("======== SELESAI DEBUG TANGGAL 02-05-2025 ========");
             }
-
             $result[] = $data;
         }
 

@@ -27,11 +27,13 @@ class AppServiceProvider extends ServiceProvider
         try {
             \Filament\Facades\Filament::serving(function () {
                 // Logging atau debugging
-                \Log::info('Filament Login Page: ' . config('filament.pages.login'));
-                \Log::info('Filament auth', [
-                    'auth' => auth()->check(),
-                    'middleware' => request()->route()?->gatherMiddleware() ?? []
-                ]);
+                if(env('APP_DEBUG', false)){
+                    \Log::info('Filament Login Page: ' . config('filament.pages.login'));
+                    \Log::info('Filament auth', [
+                        'auth' => auth()->check(),
+                        'middleware' => request()->route()?->gatherMiddleware() ?? []
+                    ]);
+                }
                 // Mengatur urutan navigation group
                 \Filament\Facades\Filament::registerNavigationGroups([
                     NavigationGroup::make()

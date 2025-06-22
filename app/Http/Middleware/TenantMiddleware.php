@@ -16,19 +16,20 @@ class TenantMiddleware
      */
     public function handle(Request $request, Closure $next): Response
 {
-    // Debug info
-    \Log::debug('TenantMiddleware running', [
-        'path' => $request->path(),
-        'method' => $request->method(),
-        'user' => auth()->check() ? auth()->id() : 'guest'
-    ]);
+    if(env('APP_DEBUG', false)){
+        // Debug info
+        \Log::debug('TenantMiddleware running', [
+            'path' => $request->path(),
+            'method' => $request->method(),
+            'user' => auth()->check() ? auth()->id() : 'guest'
+        ]);
 
-    // PENTING: Bypass untuk route login Filament
-    if (str_contains($request->path(), 'admin/login')) {
-        \Log::info('Bypassing tenant check for admin login');
-        return $next($request);
+        // PENTING: Bypass untuk route login Filament
+        if (str_contains($request->path(), 'admin/login')) {
+            \Log::info('Bypassing tenant check for admin login');
+            return $next($request);
+        }
     }
-
     $user = Auth::user();
 
     // Jika tidak ada user, redirect ke login
