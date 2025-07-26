@@ -310,6 +310,17 @@ class KasirPage extends Page
                     $transactionItem->save();
                 }
 
+                // Kurangi stock jika stock_use diaktifkan
+                if ($this->isStockUseEnabled()) {
+                    foreach ($this->cartItems as $item) {
+                        $itemModel = Item::find($item['id']);
+                        if ($itemModel) {
+                            $itemModel->stock = max(0, $itemModel->stock - $item['quantity']);
+                            $itemModel->save();
+                        }
+                    }
+                }
+
                 // Beri notifikasi sukses
                 Notification::make()
                     ->title('Piutang berhasil dicatat')
@@ -364,6 +375,17 @@ class KasirPage extends Page
                     $transactionItem->subtotal = $item['price'] * $item['quantity'];
                     $transactionItem->waktu = $transactionTime;
                     $transactionItem->save();
+                }
+
+                // Kurangi stock jika stock_use diaktifkan
+                if ($this->isStockUseEnabled()) {
+                    foreach ($this->cartItems as $item) {
+                        $itemModel = Item::find($item['id']);
+                        if ($itemModel) {
+                            $itemModel->stock = max(0, $itemModel->stock - $item['quantity']);
+                            $itemModel->save();
+                        }
+                    }
                 }
 
                 // Beri notifikasi sukses
