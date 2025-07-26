@@ -93,8 +93,11 @@ class KasirPage extends Page
             return true;
         }
         
-        // Jika stock_use diaktifkan, cek stock > 0
-        return $item->stock > 0;
+        // Jika stock_use diaktifkan, cek stock tersedia
+        $currentQuantityInCart = isset($this->cartItems[$item->id]) ? $this->cartItems[$item->id]['quantity'] : 0;
+        
+        // Bisa tambah jika masih ada stock tersisa setelah dikurangi yang sudah di keranjang
+        return ($item->stock - $currentQuantityInCart) > 0;
     }
 
     public function addToCart($itemId)
@@ -103,6 +106,21 @@ class KasirPage extends Page
 
         if (!$item) {
             return;
+        }
+
+        // Jika stock_use diaktifkan, cek stock availability
+        if ($this->isStockUseEnabled()) {
+            $currentQuantityInCart = isset($this->cartItems[$itemId]) ? $this->cartItems[$itemId]['quantity'] : 0;
+            
+            // Cek apakah masih ada stock tersedia
+            if ($currentQuantityInCart >= $item->stock) {
+                Notification::make()
+                    ->title('Stock tidak mencukupi!')
+                    ->body('Item ' . $item->name . ' hanya tersedia ' . $item->stock . ' unit.')
+                    ->warning()
+                    ->send();
+                return;
+            }
         }
 
         // Cek apakah item sudah ada di keranjang
@@ -132,7 +150,24 @@ class KasirPage extends Page
         if ($quantity <= 0) {
             unset($this->cartItems[$itemId]);
         } else {
-            $this->cartItems[$itemId]['quantity'] = $quantity;
+            // Jika stock_use diaktifkan, cek stock availability
+            if ($this->isStockUseEnabled()) {
+                $item = Item::find($itemId);
+                if ($item && $quantity > $item->stock) {
+                    Notification::make()
+                        ->title('Stock tidak mencukupi!')
+                        ->body('Item ' . $item->name . ' hanya tersedia ' . $item->stock . ' unit.')
+                        ->warning()
+                        ->send();
+                    
+                    // Set quantity ke maksimal stock yang tersedia
+                    $this->cartItems[$itemId]['quantity'] = $item->stock;
+                } else {
+                    $this->cartItems[$itemId]['quantity'] = $quantity;
+                }
+            } else {
+                $this->cartItems[$itemId]['quantity'] = $quantity;
+            }
         }
 
         // Simpan keranjang ke session
