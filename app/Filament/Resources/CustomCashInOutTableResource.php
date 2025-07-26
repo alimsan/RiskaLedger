@@ -92,7 +92,7 @@ class CustomCashInOutTableResource extends Resource
         if ($selectedMonth) {
             try {
                 // Parse tanggal dari session
-                $date = \Carbon\Carbon::parse($selectedMonth);
+                $date = Carbon::parse($selectedMonth);
 
                 // Set range tanggal untuk bulan yang dipilih
                 $startDate = $date->copy()->startOfMonth()->startOfDay();

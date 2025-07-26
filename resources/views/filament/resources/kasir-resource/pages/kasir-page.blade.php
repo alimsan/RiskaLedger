@@ -106,16 +106,34 @@
                                     <span class="text-xs bg-gray-100 dark:bg-gray-600 rounded px-1.5 py-0.5">{{ $item->category }}</span>
                                 @endif
                             </p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
+                                @if($item->stock > 0)
+                                    <span class="text-xs bg-gray-100 dark:bg-gray-600 rounded px-1.5 py-0.5">Stok {{ $item->stock }}</span>
+                                @endif
+                            </p>
                             <div class="mt-2 flex flex-col gap-2">
                                 <span class="font-medium text-gray-900 dark:text-white">{{ $item->formatted_price }}</span>
+                                @php
+                                    $canAdd = $this->canAddToCart($item);
+                                @endphp
                                 <button
                                     wire:click="addToCart({{ $item->id }})"
-                                    class="w-full text-white bg-primary-600 hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 font-medium rounded-lg text-xs py-1.5 px-2 inline-flex items-center justify-center"
+                                    @if(!$canAdd) disabled @endif
+                                    class="w-full font-medium rounded-lg text-xs py-1.5 px-2 inline-flex items-center justify-center
+                                        @if($canAdd)
+                                            text-white bg-primary-600 hover:bg-primary-700 focus:ring-2 focus:ring-primary-500
+                                        @else
+                                            text-gray-400 bg-gray-300 dark:bg-gray-600 dark:text-gray-500 cursor-not-allowed
+                                        @endif"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                     </svg>
-                                    Tambah
+                                    @if($canAdd)
+                                        Tambah
+                                    @else
+                                        Stok Habis
+                                    @endif
                                 </button>
                             </div>
                         </div>

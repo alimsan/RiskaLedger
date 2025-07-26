@@ -84,6 +84,11 @@ class Tenant extends Model
         return $this->hasOne(User::class)->where('role', 'operator');
     }
 
+    public function configTenants()
+    {
+        return $this->hasMany(ConfigTenants::class);
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

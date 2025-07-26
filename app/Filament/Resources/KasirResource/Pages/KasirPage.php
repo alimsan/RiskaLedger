@@ -6,6 +6,7 @@ use App\Filament\Resources\KasirResource;
 use App\Models\Item;
 use App\Models\CashInOutType;
 use App\Models\mCashInOut;
+use App\Models\ConfigTenants;
 use Filament\Resources\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 use Filament\Actions\Action;
@@ -65,6 +66,35 @@ class KasirPage extends Page
         }
 
         return $query->get();
+    }
+
+    /**
+     * Mengecek apakah penggunaan stock diaktifkan untuk tenant
+     */
+    public function isStockUseEnabled()
+    {
+        $tenantId = auth()->user()->tenant_id;
+        
+        $stockConfig = ConfigTenants::where('tenant_id', $tenantId)
+            ->where('name', 'stock_use')
+            ->where('status', true)
+            ->first();
+            
+        return $stockConfig ? true : false;
+    }
+
+    /**
+     * Mengecek apakah item dapat ditambahkan ke keranjang
+     */
+    public function canAddToCart($item)
+    {
+        // Jika stock_use tidak diaktifkan, selalu bisa tambah
+        if (!$this->isStockUseEnabled()) {
+            return true;
+        }
+        
+        // Jika stock_use diaktifkan, cek stock > 0
+        return $item->stock > 0;
     }
 
     public function addToCart($itemId)
