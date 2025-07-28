@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\ItemResource\Pages;
 use App\Filament\Resources\ItemResource\RelationManagers;
 use App\Models\Item;
+use App\Models\ConfigTenants;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -30,7 +31,26 @@ class ItemResource extends Resource
     }
     public static function canAccess(): bool
     {
-        return auth()->user()->hasRole(['owner','manager', 'operator']);
+        $user = auth()->user();
+        
+        // Cek role owner dan manager (akses default)
+        if ($user->hasRole(['owner','manager'])) {
+            return true;
+        }
+        
+        // Cek role operator dengan konfigurasi operator_produk
+        if ($user->hasRole('operator')) {
+            $tenantId = $user->tenant_id;
+            
+            $operatorProdukConfig = ConfigTenants::where('tenant_id', $tenantId)
+                ->where('name', 'operator_produk')
+                ->where('status', true)
+                ->first();
+                
+            return $operatorProdukConfig ? true : false;
+        }
+        
+        return false;
     }
     public static function form(Form $form): Form
     {
