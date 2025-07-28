@@ -28,7 +28,29 @@ class CashInOutTypeResource extends Resource
     {
         return 'Pengaturan';
     }
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
 
+        // Cek role owner dan manager (akses default)
+        if ($user->hasRole(['owner','manager'])) {
+            return true;
+        }
+
+        // Cek role operator dengan konfigurasi operator_produk
+        if ($user->hasRole('operator')) {
+            $tenantId = $user->tenant_id;
+
+            $operatorProdukConfig = \App\Models\ConfigTenants::where('tenant_id', $tenantId)
+                ->where('name', 'operator_produk')
+                ->where('status', true)
+                ->first();
+
+            return $operatorProdukConfig ? true : false;
+        }
+
+        return false;
+    }
     public static function form(Form $form): Form
     {
         $user = auth()->user();
