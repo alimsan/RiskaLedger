@@ -24,6 +24,7 @@ class User extends Authenticatable
         'password',
         'role',
         'tenant_id',
+        'current_tenant_id',
     ];
 
     /**
@@ -47,11 +48,59 @@ class User extends Authenticatable
     ];
 
     /**
-     * Get the tenant that the user belongs to.
+     * Get the tenant that the user belongs to (legacy - for backward compatibility).
      */
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    /**
+     * Get all tenants that the user has access to.
+     */
+    public function tenants()
+    {
+        return $this->belongsToMany(Tenant::class, 'tenant_user')
+            ->withPivot('is_default')
+            ->withTimestamps();
+    }
+
+    /**
+     * Get the current active tenant.
+     */
+    public function currentTenant()
+    {
+        return $this->belongsTo(Tenant::class, 'current_tenant_id');
+    }
+
+    /**
+     * Get the current tenant ID (prioritize current_tenant_id, fallback to tenant_id).
+     */
+    public function getCurrentTenantId(): ?int
+    {
+        return $this->current_tenant_id ?? $this->tenant_id;
+    }
+
+    /**
+     * Switch to a different tenant.
+     */
+    public function switchTenant(int $tenantId): bool
+    {
+        // Check if user has access to this tenant
+        if (!$this->tenants()->where('tenants.id', $tenantId)->exists()) {
+            return false;
+        }
+
+        $this->update(['current_tenant_id' => $tenantId]);
+        return true;
+    }
+
+    /**
+     * Get default tenant for this user.
+     */
+    public function getDefaultTenant()
+    {
+        return $this->tenants()->wherePivot('is_default', true)->first();
     }
 
     /**
@@ -104,12 +153,12 @@ class User extends Authenticatable
             return true;
         }
 
-        // If no specific tenant is provided, check if user has a tenant
+        // If no specific tenant is provided, check if user has any tenant
         if ($tenantId === null) {
-            return $this->tenant_id !== null;
+            return $this->tenants()->exists() || $this->tenant_id !== null;
         }
 
-        // For regular users, they can only access their own tenant
-        return $this->tenant_id === $tenantId;
+        // For regular users, check if they have access to the specified tenant
+        return $this->tenants()->where('tenants.id', $tenantId)->exists() || $this->tenant_id === $tenantId;
     }
 }

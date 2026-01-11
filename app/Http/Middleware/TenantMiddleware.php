@@ -63,15 +63,26 @@ class TenantMiddleware
         ], 403);
     }
 
-    // Jika tidak ada tenant_id di request, tetapi user memiliki tenant,
-    // set tenant_id di session agar bisa digunakan nanti
-    if (!$tenantId && $user->tenant_id) {
-        session(['tenant_id' => $user->tenant_id]);
+    // Set current tenant ID in session
+    // Priority: current_tenant_id > tenant_id (legacy)
+    $currentTenantId = $user->getCurrentTenantId();
+    
+    if (!$tenantId && $currentTenantId) {
+        session(['tenant_id' => $currentTenantId]);
     }
 
     // Atau jika ada tenant_id di request, simpan di session
     if ($tenantId) {
         session(['tenant_id' => $tenantId]);
+    }
+
+    // Auto-set current_tenant_id if not set but user has tenants
+    if (!$user->current_tenant_id && !$user->tenant_id) {
+        $firstTenant = $user->tenants()->first();
+        if ($firstTenant) {
+            $user->update(['current_tenant_id' => $firstTenant->id]);
+            session(['tenant_id' => $firstTenant->id]);
+        }
     }
 
     return $next($request);

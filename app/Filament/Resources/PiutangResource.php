@@ -77,7 +77,7 @@ class PiutangResource extends Resource
                                 return $query->where('is_income', true)
                                     ->where('is_active', true)
                                     ->when(!auth()->user()->hasRole(['superadmin', 'admin']), function ($query) {
-                                        return $query->where('tenant_id', auth()->user()->tenant_id);
+                                        return $query->where('tenant_id', auth()->user()->getCurrentTenantId());
                                     });
                             })
                             ->searchable()
@@ -391,7 +391,7 @@ class PiutangResource extends Resource
                             }
 
                             // Jika lebih dari 1 record, gabungkan menjadi satu nota
-                            $tenant = \App\Models\Tenant::find(auth()->user()->tenant_id);
+                            $tenant = \App\Models\Tenant::find(auth()->user()->getCurrentTenantId());
 
                             // Siapkan data untuk semua piutang
                             $items = [];
@@ -453,7 +453,7 @@ class PiutangResource extends Resource
         // Jika pengguna bukan superadmin atau admin, batasi data yang ditampilkan
         if (!auth()->user()->hasRole(['superadmin', 'admin'])) {
             // Jika user adalah owner atau operator, hanya tampilkan piutang untuk tenant mereka
-            $query->where('tenant_id', auth()->user()->tenant_id);
+            $query->where('tenant_id', auth()->user()->getCurrentTenantId());
         }
 
         return $query;

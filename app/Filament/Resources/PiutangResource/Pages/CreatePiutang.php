@@ -14,7 +14,7 @@ class CreatePiutang extends CreateRecord
     {
         // Jika bukan superadmin atau admin, set tenant_id ke tenant pengguna saat ini
         if (!auth()->user()->hasRole(['superadmin', 'admin'])) {
-            $data['tenant_id'] = auth()->user()->tenant_id;
+            $data['tenant_id'] = auth()->user()->getCurrentTenantId();
         }
 
         return $data;

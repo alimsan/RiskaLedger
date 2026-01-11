@@ -18,7 +18,7 @@ class IncomeExpenseStatWidget extends BaseWidget
     protected function getStats(): array
     {
         // Dapatkan tenant ID dari user yang sedang login
-        $tenantId = auth()->user()->tenant_id;
+        $tenantId = auth()->user()->getCurrentTenantId();
 
         // Dapatkan tipe pendapatan dan pengeluaran
         $incomeTypes = CashInOutType::where('is_income', true)
@@ -206,7 +206,7 @@ class IncomeExpenseStatWidget extends BaseWidget
     protected function getIncomeChartData(): array
     {
         // Dapatkan tenant ID dari user yang sedang login
-        $tenantId = auth()->user()->tenant_id;
+        $tenantId = auth()->user()->getCurrentTenantId();
 
         // Dapatkan tipe pendapatan
         $incomeTypes = CashInOutType::where('is_income', true)
@@ -241,7 +241,7 @@ class IncomeExpenseStatWidget extends BaseWidget
     protected function getExpenseChartData(): array
     {
         // Dapatkan tenant ID dari user yang sedang login
-        $tenantId = auth()->user()->tenant_id;
+        $tenantId = auth()->user()->getCurrentTenantId();
 
         // Dapatkan tipe pengeluaran
         $expenseTypes = CashInOutType::where('is_income', false)
@@ -276,7 +276,7 @@ class IncomeExpenseStatWidget extends BaseWidget
     protected function getProfitChartData(): array
     {
         // Dapatkan tenant ID dari user yang sedang login
-        $tenantId = auth()->user()->tenant_id;
+        $tenantId = auth()->user()->getCurrentTenantId();
 
         // Dapatkan tipe pendapatan dan pengeluaran
         $incomeTypes = CashInOutType::where('is_income', true)
@@ -331,7 +331,7 @@ class IncomeExpenseStatWidget extends BaseWidget
     protected function getOnGoingChartData(): array
     {
         // Dapatkan tenant ID dari user yang sedang login
-        $tenantId = auth()->user()->tenant_id;
+        $tenantId = auth()->user()->getCurrentTenantId();
 
         // Data untuk 6 bulan terakhir
         $months = collect(range(0, 5))->map(function ($i) {
@@ -367,6 +367,6 @@ class IncomeExpenseStatWidget extends BaseWidget
 
     public static function canView(): bool
     {
-        return auth()->user() && (auth()->user()->isAdministrator() || auth()->user()->tenant_id);
+        return auth()->user() && (auth()->user()->isAdministrator() || auth()->user()->getCurrentTenantId());
     }
 }

@@ -14,7 +14,7 @@ class CreateItem extends CreateRecord
     {
         // Jika bukan admin, set tenant_id ke tenant pengguna saat ini
         if (!auth()->user()->isAdministrator()) {
-            $data['tenant_id'] = auth()->user()->tenant_id;
+            $data['tenant_id'] = auth()->user()->getCurrentTenantId();
         }
 
         return $data;

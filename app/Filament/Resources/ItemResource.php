@@ -193,7 +193,7 @@ class ItemResource extends Resource
                 Tables\Filters\SelectFilter::make('category')
                     ->label('Kategori')
                     ->options(function () {
-                        $tenantId = auth()->user()->tenant_id;
+                        $tenantId = auth()->user()->getCurrentTenantId();
                         $query = Item::select('category')->distinct();
 
                         if (!auth()->user()->isAdministrator()) {

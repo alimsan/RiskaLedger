@@ -83,7 +83,7 @@ class TestPrinterController extends Controller
                 }
                 
                 // Ambil data tenant
-                $tenant = Tenant::find(auth()->user()->tenant_id);
+                $tenant = Tenant::find(auth()->user()->getCurrentTenantId());
                 
                 // Ambil jenis pembayaran
                 $paymentMethod = CashInOutType::find($transaction->type_id)->name ?? 'Tunai';
@@ -115,7 +115,7 @@ class TestPrinterController extends Controller
         $cashier_name = session('print_cashier_name', auth()->user()->name ?? 'Admin');
         
         // Ambil data tenant
-        $tenant = Tenant::find(auth()->user()->tenant_id);
+        $tenant = Tenant::find(auth()->user()->getCurrentTenantId());
         
         return view('thermal-printer', [
             'items' => $items,

@@ -211,7 +211,7 @@ class HasilAkhirResource extends Resource
         }
 
         // Dapatkan tenant ID dari user yang sedang login
-        $tenantId = auth()->user()->tenant_id;
+        $tenantId = auth()->user()->getCurrentTenantId();
 
         return $table
             ->view('filament.resources.custom-cash-in-out-table.hasil', [

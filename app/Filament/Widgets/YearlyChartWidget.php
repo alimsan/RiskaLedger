@@ -16,8 +16,8 @@ class YearlyChartWidget extends ChartWidget
 
     protected function getData(): array
     {
-        // Dapatkan tenant ID dari user yang sedang login
-        $tenantId = auth()->user()->tenant_id;
+        // Dapatkan tenant ID dari user yang sedang login (gunakan current_tenant_id)
+        $tenantId = auth()->user()->getCurrentTenantId();
 
         // Buat array untuk bulan (1-12)
         $months = range(1, 12);
@@ -102,6 +102,6 @@ class YearlyChartWidget extends ChartWidget
 
     public static function canView(): bool
     {
-        return auth()->user() && (auth()->user()->isAdministrator() || auth()->user()->tenant_id);
+        return auth()->user() && (auth()->user()->isAdministrator() || auth()->user()->getCurrentTenantId());
     }
 }

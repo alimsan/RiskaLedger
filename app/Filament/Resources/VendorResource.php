@@ -138,7 +138,7 @@ class VendorResource extends Resource
         // Jika pengguna bukan superadmin atau admin, batasi data yang ditampilkan
         if (!auth()->user()->hasRole(['superadmin', 'admin'])) {
             // Jika user adalah owner atau operator, hanya tampilkan vendor untuk tenant mereka
-            $query->where('tenant_id', auth()->user()->tenant_id);
+            $query->where('tenant_id', auth()->user()->getCurrentTenantId());
         }
 
         return $query;

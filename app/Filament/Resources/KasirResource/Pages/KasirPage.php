@@ -41,7 +41,7 @@ class KasirPage extends Page
     #[Computed]
     public function categories()
     {
-        $tenantId = auth()->user()->tenant_id;
+        $tenantId = auth()->user()->getCurrentTenantId();
         return Item::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->distinct()
@@ -53,7 +53,7 @@ class KasirPage extends Page
     #[Computed]
     public function items()
     {
-        $tenantId = auth()->user()->tenant_id;
+        $tenantId = auth()->user()->getCurrentTenantId();
         $query = Item::where('tenant_id', $tenantId)
             ->where('is_active', true);
 
@@ -73,7 +73,7 @@ class KasirPage extends Page
      */
     public function isStockUseEnabled()
     {
-        $tenantId = auth()->user()->tenant_id;
+        $tenantId = auth()->user()->getCurrentTenantId();
         
         $stockConfig = ConfigTenants::where('tenant_id', $tenantId)
             ->where('name', 'stock_use')
@@ -220,7 +220,7 @@ class KasirPage extends Page
         return CashInOutType::where('is_income', true)
             ->where('is_active', true)
             ->where(function($query) {
-                $query->where('tenant_id', auth()->user()->tenant_id)
+                $query->where('tenant_id', auth()->user()->getCurrentTenantId())
                     ->orWhereNull('tenant_id');
             })
             ->get();
@@ -229,7 +229,7 @@ class KasirPage extends Page
     #[Computed]
     public function vendors()
     {
-        $tenantId = auth()->user()->tenant_id;
+        $tenantId = auth()->user()->getCurrentTenantId();
         return Vendor::where('tenant_id', $tenantId)->get();
     }
 
@@ -445,7 +445,7 @@ class KasirPage extends Page
     protected function generateReceipt($data)
     {
         // Ambil data tenant
-        $tenant = \App\Models\Tenant::find(auth()->user()->tenant_id);
+        $tenant = \App\Models\Tenant::find(auth()->user()->getCurrentTenantId());
 
         // Tambahkan informasi tenant ke data
         $data['tenant_name'] = $tenant->name ?? 'N/A';

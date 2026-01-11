@@ -146,7 +146,7 @@ class TenantResource extends Resource
         // Jika pengguna bukan superadmin atau admin, batasi data yang ditampilkan
         if (!auth()->user()->hasRole(['superadmin', 'admin'])) {
             // Jika user adalah owner atau operator, hanya tampilkan tenant mereka
-            $query->where('id', auth()->user()->tenant_id);
+            $query->where('id', auth()->user()->getCurrentTenantId());
         }
 
         return $query;

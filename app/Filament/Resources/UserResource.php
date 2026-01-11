@@ -73,12 +73,29 @@ class UserResource extends Resource
         // Field tenant hanya ditampilkan jika role adalah owner atau operator
         if ($user->isAdministrator()) {
             $formSchema[] = Forms\Components\Select::make('tenant_id')
-                ->label('Tenant')
+                ->label('Tenant (Legacy)')
                 ->relationship('tenant', 'name')
                 ->preload()
                 ->searchable()
                 ->visible(fn (callable $get) => in_array($get('role'), ['owner', 'operator']))
-                ->required(fn (callable $get) => in_array($get('role'), ['owner', 'operator']));
+                ->helperText('Kolom ini untuk backward compatibility. Gunakan "Tenants" untuk multi-tenant.');
+            
+            $formSchema[] = Forms\Components\Select::make('tenants')
+                ->label('Tenants')
+                ->relationship('tenants', 'name')
+                ->multiple()
+                ->preload()
+                ->searchable()
+                ->visible(fn (callable $get) => in_array($get('role'), ['owner', 'operator']))
+                ->helperText('User dapat memiliki akses ke beberapa tenant.');
+            
+            $formSchema[] = Forms\Components\Select::make('current_tenant_id')
+                ->label('Tenant Aktif')
+                ->relationship('currentTenant', 'name')
+                ->preload()
+                ->searchable()
+                ->visible(fn (callable $get) => in_array($get('role'), ['owner', 'operator']))
+                ->helperText('Tenant yang sedang aktif untuk user ini.');
         }
 
         return $form->schema([
@@ -93,7 +110,15 @@ class UserResource extends Resource
         // Filter data berdasarkan tenant user jika bukan admin
         $query = function (Builder $query) use ($user) {
             if (!$user->isAdministrator()) {
-                $query->where('tenant_id', $user->tenant_id);
+                $currentTenantId = $user->getCurrentTenantId();
+                if ($currentTenantId) {
+                    $query->where(function($q) use ($currentTenantId) {
+                        $q->where('tenant_id', $currentTenantId)
+                          ->orWhereHas('tenants', function($q) use ($currentTenantId) {
+                              $q->where('tenants.id', $currentTenantId);
+                          });
+                    });
+                }
             }
         };
 
@@ -139,8 +164,19 @@ class UserResource extends Resource
         if ($user->isAdministrator()) {
             array_splice($columns, 3, 0, [
                 Tables\Columns\TextColumn::make('tenant.name')
-                    ->label('Tenant')
+                    ->label('Tenant (Legacy)')
                     ->sortable()
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('tenants.name')
+                    ->label('Tenants')
+                    ->badge()
+                    ->separator(',')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('currentTenant.name')
+                    ->label('Tenant Aktif')
+                    ->badge()
+                    ->color('success')
                     ->searchable()
             ]);
         }

@@ -61,11 +61,21 @@ class Tenant extends Model
     }
 
     /**
-     * Get the users for the tenant.
+     * Get the users for the tenant (legacy - one-to-many).
      */
     public function users()
     {
         return $this->hasMany(User::class);
+    }
+
+    /**
+     * Get all users that have access to this tenant (many-to-many).
+     */
+    public function assignedUsers()
+    {
+        return $this->belongsToMany(User::class, 'tenant_user')
+            ->withPivot('is_default')
+            ->withTimestamps();
     }
 
     /**

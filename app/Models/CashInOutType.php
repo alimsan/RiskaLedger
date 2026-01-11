@@ -82,7 +82,7 @@ class CashInOutType extends Model
                 'max:255',
                 Rule::unique('cash_in_out_types', 'code')
                     ->where(function ($query) {
-                        return $query->where('tenant_id', auth()->user()->tenant_id);
+                        return $query->where('tenant_id', auth()->user()->getCurrentTenantId());
                     })
                     ->ignore($id)
             ],

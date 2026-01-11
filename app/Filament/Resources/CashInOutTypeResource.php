@@ -67,7 +67,7 @@ class CashInOutTypeResource extends Resource
                     table: 'cash_in_out_types',
                     column: 'code',
                     modifyRuleUsing: fn (\Illuminate\Validation\Rules\Unique $rule) =>
-                        $rule->where('tenant_id', auth()->user()->tenant_id),
+                        $rule->where('tenant_id', auth()->user()->getCurrentTenantId()),
                     ignoreRecord: true
                 )->validationMessages([
                     'unique' => 'Kode :attribute sudah digunakan.',
