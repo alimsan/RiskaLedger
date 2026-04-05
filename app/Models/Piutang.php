@@ -75,7 +75,7 @@ class Piutang extends Model
      */
     public function transactionItems()
     {
-        return $this->hasMany(TransactionItems::class, 'transaction_id', 'id');
+        return $this->hasMany(TransactionItems::class, 'transaction_id', 'id')->where('transaction_type', 'piutang');
     }
 
     /**

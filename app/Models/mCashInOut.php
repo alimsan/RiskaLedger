@@ -12,6 +12,21 @@ class mCashInOut extends Model
     use HasFactory;
     use LogsActivity;
 
+    /**
+     * Boot the model.
+     *
+     * @return void
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function($cashInOut) {
+            // Menghapus semua transaction_items terkait
+            $cashInOut->transactionItems()->delete();
+        });
+    }
+
     protected $table = 'cash_in_out';
     protected $primaryKey = 'id';
     protected $dateFormat = 'Y-m-d H:i:s';
@@ -46,6 +61,14 @@ class mCashInOut extends Model
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    /**
+     * Get the transaction items for the cash_in_out.
+     */
+    public function transactionItems()
+    {
+        return $this->hasMany(TransactionItems::class, 'transaction_id', 'id')->where('transaction_type', 'penjualan');
     }
 
     // Accessor untuk mendapatkan kode tipe
