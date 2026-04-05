@@ -10,10 +10,29 @@ use App\Models\Piutang;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
+use Livewire\Attributes\On;
 
 class IncomeExpenseStatWidget extends BaseWidget
 {
     protected static ?int $sort = 1;
+
+    #[On('dateFilterChanged')]
+    public function dateFilterChanged(?string $state = null): void
+    {
+        // Livewire akan otomatis re-render widget saat event diterima
+    }
+
+    /**
+     * Ambil tanggal yang dipilih dari session, fallback ke bulan ini.
+     */
+    protected function getSelectedDate(): Carbon
+    {
+        $selectedMonth = session('selected_month');
+
+        return $selectedMonth
+            ? Carbon::parse($selectedMonth)
+            : Carbon::now();
+    }
 
     protected function getStats(): array
     {
@@ -41,13 +60,14 @@ class IncomeExpenseStatWidget extends BaseWidget
             })
             ->pluck('id');
 
-        // Tanggal untuk bulan ini
-        $startOfMonth = Carbon::now()->startOfMonth();
-        $endOfMonth = Carbon::now()->endOfMonth();
+        // Tanggal berdasarkan filter yang dipilih
+        $selectedDate = $this->getSelectedDate();
+        $startOfMonth = $selectedDate->copy()->startOfMonth();
+        $endOfMonth = $selectedDate->copy()->endOfMonth();
 
-        // Tanggal untuk bulan lalu
-        $startOfLastMonth = Carbon::now()->subMonth()->startOfMonth();
-        $endOfLastMonth = Carbon::now()->subMonth()->endOfMonth();
+        // Tanggal untuk bulan sebelumnya
+        $startOfLastMonth = $selectedDate->copy()->subMonth()->startOfMonth();
+        $endOfLastMonth = $selectedDate->copy()->subMonth()->endOfMonth();
 
         // Query pendapatan bulan ini
         $income = mCashInOut::whereIn('type_id', $incomeTypes)
@@ -107,8 +127,8 @@ class IncomeExpenseStatWidget extends BaseWidget
         $formattedProfit = 'Rp ' . number_format($profit, 0, ',', '.');
 
         // Format nama bulan
-        $currentMonth = Carbon::now()->translatedFormat('F');
-        $lastMonth = Carbon::now()->subMonth()->translatedFormat('F');
+        $currentMonth = $selectedDate->translatedFormat('F');
+        $lastMonth = $selectedDate->copy()->subMonth()->translatedFormat('F');
 
         // Query untuk Piutang yang lunas bulan ini
         $paidDebt = Piutang::where('lunas', true)
@@ -219,9 +239,10 @@ class IncomeExpenseStatWidget extends BaseWidget
             })
             ->pluck('id');
 
-        // Data untuk 6 bulan terakhir
-        $months = collect(range(0, 5))->map(function ($i) {
-            return Carbon::now()->subMonths($i)->startOfMonth();
+        // Data untuk 6 bulan terakhir dari bulan yang dipilih
+        $selectedDate = $this->getSelectedDate();
+        $months = collect(range(0, 5))->map(function ($i) use ($selectedDate) {
+            return $selectedDate->copy()->subMonths($i)->startOfMonth();
         })->reverse();
 
         return $months->map(function ($month) use ($tenantId, $incomeTypes) {
@@ -254,9 +275,10 @@ class IncomeExpenseStatWidget extends BaseWidget
             })
             ->pluck('id');
 
-        // Data untuk 6 bulan terakhir
-        $months = collect(range(0, 5))->map(function ($i) {
-            return Carbon::now()->subMonths($i)->startOfMonth();
+        // Data untuk 6 bulan terakhir dari bulan yang dipilih
+        $selectedDate = $this->getSelectedDate();
+        $months = collect(range(0, 5))->map(function ($i) use ($selectedDate) {
+            return $selectedDate->copy()->subMonths($i)->startOfMonth();
         })->reverse();
 
         return $months->map(function ($month) use ($tenantId, $expenseTypes) {
@@ -299,9 +321,10 @@ class IncomeExpenseStatWidget extends BaseWidget
             })
             ->pluck('id');
 
-        // Data untuk 6 bulan terakhir
-        $months = collect(range(0, 5))->map(function ($i) {
-            return Carbon::now()->subMonths($i)->startOfMonth();
+        // Data untuk 6 bulan terakhir dari bulan yang dipilih
+        $selectedDate = $this->getSelectedDate();
+        $months = collect(range(0, 5))->map(function ($i) use ($selectedDate) {
+            return $selectedDate->copy()->subMonths($i)->startOfMonth();
         })->reverse();
 
         return $months->map(function ($month) use ($tenantId, $incomeTypes, $expenseTypes) {
@@ -333,9 +356,10 @@ class IncomeExpenseStatWidget extends BaseWidget
         // Dapatkan tenant ID dari user yang sedang login
         $tenantId = auth()->user()->tenant_id;
 
-        // Data untuk 6 bulan terakhir
-        $months = collect(range(0, 5))->map(function ($i) {
-            return Carbon::now()->subMonths($i)->startOfMonth();
+        // Data untuk 6 bulan terakhir dari bulan yang dipilih
+        $selectedDate = $this->getSelectedDate();
+        $months = collect(range(0, 5))->map(function ($i) use ($selectedDate) {
+            return $selectedDate->copy()->subMonths($i)->startOfMonth();
         })->reverse();
 
         return $months->map(function ($month) use ($tenantId) {
