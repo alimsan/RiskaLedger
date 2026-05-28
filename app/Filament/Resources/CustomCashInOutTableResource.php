@@ -3,18 +3,16 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\CustomCashInOutTableResource\Pages;
-use App\Filament\Resources\CustomCashInOutTableResource\RelationManagers;
 use App\Models\mCashInOut;
+use App\Models\CashInOutType;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
-use Filament\Tables;
 use Filament\Tables\Table;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Style\Font;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
-
+use Illuminate\Database\Eloquent\Builder;
+use Filament\Tables\Filters\Filter;
+use Carbon\Carbon;
+use Illuminate\Support\Str;
 
 class CustomCashInOutTableResource extends Resource
 {
@@ -24,6 +22,8 @@ class CustomCashInOutTableResource extends Resource
     protected static ?string $navigationLabel = 'Tabel Rekap';
     protected static ?string $modelLabel = 'Tabel Rekap';
     protected static ?string $pluralModelLabel = 'Tabel Rekap';
+
+
     public static function canCreate(): bool
     {
         return false;
@@ -32,35 +32,71 @@ class CustomCashInOutTableResource extends Resource
     {
         return $form
             ->schema([
-
+                // Form tidak digunakan untuk resource ini
             ]);
     }
-    protected static function getTotalByType(array $types, $tanggal)
+
+    protected static function getTotalByType(array $types, $tanggal, $tenantId = null)
     {
-        return mCashInOut::whereIn('type', $types)
-            ->whereDate('waktu', $tanggal)
-            ->sum('nilai');
+        // Pastikan tipe valid
+        if (empty($types)) {
+            \Log::warning("Array tipe kosong di getTotalByType");
+            return 0;
+        }
+
+        // Ambil type_id dari type code
+        $typeIds = CashInOutType::whereIn('code', $types)->pluck('id');
+
+        // Jika tidak ada tipe yang ditemukan, return 0
+        if ($typeIds->isEmpty()) {
+            \Log::warning("Tidak ada type_id ditemukan untuk codes: " . implode(', ', $types));
+            return 0;
+        }
+
+        $query = mCashInOut::whereIn('type_id', $typeIds)
+            ->whereDate('waktu', $tanggal);
+
+        // Filter berdasarkan tenant jika ada
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        return $query->sum('nilai');
     }
-    protected static function getTotalNilai(array $types)
+
+    protected static function getTotalNilai(array $types, $tenantId = null)
     {
-        $query = mCashInOut::whereIn('type', $types);
+        // Pastikan tipe valid
+        if (empty($types)) {
+            \Log::warning("Array tipe kosong di getTotalNilai");
+            return 0;
+        }
+
+        // Ambil type_id dari type code
+        $typeIds = CashInOutType::whereIn('code', $types)->pluck('id');
+
+        // Jika tidak ada tipe yang ditemukan, return 0
+        if ($typeIds->isEmpty()) {
+            \Log::warning("Tidak ada type_id ditemukan untuk codes: " . implode(', ', $types));
+            return 0;
+        }
+
+        $query = mCashInOut::whereIn('type_id', $typeIds);
+
+        // Filter berdasarkan tenant jika ada
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
 
         $selectedMonth = session('selected_month');
         if ($selectedMonth) {
             try {
                 // Parse tanggal dari session
-                $date = \Carbon\Carbon::parse($selectedMonth);
+                $date = Carbon::parse($selectedMonth);
 
                 // Set range tanggal untuk bulan yang dipilih
                 $startDate = $date->copy()->startOfMonth()->startOfDay();
                 $endDate = $date->copy()->endOfMonth()->endOfDay();
-
-                // Debug untuk memastikan range tanggal benar
-                // \Log::info('Date Range', [
-                //     'selected_month' => $selectedMonth,
-                //     'start_date' => $startDate->toDateTimeString(),
-                //     'end_date' => $endDate->toDateTimeString()
-                // ]);
 
                 // Filter berdasarkan range tanggal
                 $query->whereBetween('waktu', [
@@ -73,203 +109,527 @@ class CustomCashInOutTableResource extends Resource
             }
         }
 
-        // Debug untuk melihat query yang dijalankan
-        // \Log::info('SQL Query', [
-        //     'sql' => $query->toSql(),
-        //     'bindings' => $query->getBindings()
-        // ]);
-
         return $query->sum('nilai');
     }
-    public static function getTableData(string $startDate, string $endDate): array
+
+    public static function getTableData($startDate, $endDate, $tenantId = null)
     {
-        $dates = collect(range(strtotime($startDate), strtotime($endDate), 86400))
-            ->map(function ($timestamp) {
-                return date('Y-m-d', $timestamp);
+        // Inisialisasi query dasar
+        $query = mCashInOut::query()
+            ->with('type') // Eager load type relation
+            ->whereDate('waktu', '>=', $startDate)
+            ->whereDate('waktu', '<=', $endDate)
+            ->orderBy('waktu', 'asc');
+
+        // Filter berdasarkan tenant jika ada
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        // Ambil data kasbok
+        $cash_in_out = $query->get();
+
+        // Buat array dari rentang tanggal
+        $dates = new \DatePeriod(
+            new \DateTime($startDate),
+            new \DateInterval('P1D'),
+            (new \DateTime($endDate))->modify('+1 day')
+        );
+
+        // Definisikan tipe pengeluaran dan pendapatan
+        $expenseTypes = CashInOutType::where('is_income', false)
+                        ->where('is_active', true)
+                        ->orderBy('sort_order')
+                        ->get();
+
+        $incomeTypes = CashInOutType::where('is_income', true)
+                        ->where('is_active', true)
+                        ->orderBy('sort_order')
+                        ->get();
+
+        // Bentuk untuk pencarian cepat tipe berdasarkan ID
+        $typeById = [];
+        foreach ($incomeTypes as $type) {
+            $typeById[$type->id] = $type;
+        }
+        foreach ($expenseTypes as $type) {
+            $typeById[$type->id] = $type;
+        }
+
+        $result = [];
+
+        foreach ($dates as $date) {
+            $date_str = $date->format('Y-m-d');
+            $tanggal = $date->format('d-m-Y');
+
+            // Inisialisasi data untuk tanggal ini
+            $data = new \stdClass();
+            $data->tanggal = $tanggal;
+            $data->penjualan = 0;
+            $data->total_qty = 0; // Inisialisasi total quantity
+
+            // Untuk debugging jika tanggal 02-05-2025
+            $debugInfo = [];
+            $isDebugDate = ($date_str == '2025-05-02');
+
+            if ($isDebugDate) {
+                \Log::info("======== MEMULAI DEBUG TANGGAL 02-05-2025 ========");
+            }
+
+            // Inisialisasi kolom untuk tipe pendapatan
+            foreach ($incomeTypes as $type) {
+                $code = strtolower($type->code);
+                $data->$code = 0;
+            }
+
+            // Inisialisasi kolom untuk tipe pengeluaran
+            foreach ($expenseTypes as $type) {
+                $code = strtolower($type->code);
+                $data->$code = 0;
+            }
+
+            // Jumlah = pendapatan - pengeluaran
+            $data->tb1_jumlah = 0;
+
+            // Tracking transaksi untuk mencegah duplikasi
+            $processedTransactions = [];
+
+            // Filter data untuk tanggal ini
+            $filtered_data = $cash_in_out->filter(function ($item) use ($date_str) {
+                return date('Y-m-d', strtotime($item->waktu)) == $date_str;
             });
 
-        $data = [];
-        foreach ($dates as $date) {
-            $data[] = (object) [
-                'tanggal' => $date,
-                'penjualan' => static::getTotalByType(['QRIS', 'TUNAI'], $date),
-                'qris' => static::getTotalByType(['QRIS'], $date),
-                'tunai' => static::getTotalByType(['TUNAI'], $date),
-                'b_baku' => static::getTotalByType(['B_BAKU'], $date),
-                'peralatan' => static::getTotalByType(['PERALATAN'], $date),
-                'band' => static::getTotalByType(['BAND'], $date),
-                'listrik' => static::getTotalByType(['LISTRIK'], $date),
-                'gas' => static::getTotalByType(['GAS'], $date),
-                'refund' => static::getTotalByType(['REFUND'], $date),
-                'kasbon' => static::getTotalByType(['KASBON'], $date),
-                'owner' => static::getTotalByType(['OWNER'], $date),
-                'compliment' => static::getTotalByType(['COMPLIMENT'], $date),
-                'bpjs' => static::getTotalByType(['BPJS'], $date),
-                'tb1_jumlah' => static::getTotalByType([
-                    'TUNAI',
-                ], $date) - static::getTotalByType([
-                                'B_BAKU',
-                                'PERALATAN',
-                                'BAND',
-                                'LISTRIK',
-                                'GAS',
-                                'REFUND',
-                                'KASBON',
-                                'OWNER',
-                                'COMPLIMENT',
-                                'BPJS'
-                            ], $date),
-            ];
+            if ($isDebugDate) {
+                \Log::info("Jumlah transaksi pada 02-05-2025: " . $filtered_data->count());
+            }
+
+            // Hitung penjualan dan kategorikan transaksi
+            $totalPendapatanHariIni = 0;
+            $totalPengeluaranHariIni = 0;
+
+            // Hitung total quantity dari transaction_items berdasarkan tanggal saja
+            $totalQty = \App\Models\TransactionItems::whereDate('waktu', $date_str)
+                ->join('items', 'transaction_items.item_id', '=', 'items.id')
+                ->where('items.tenant_id', $tenantId)
+                ->sum('quantity');
+
+            $data->total_qty = $totalQty;
+
+            foreach ($filtered_data as $item) {
+                try {
+                    // Pastikan type_id ada dan valid
+                    if (!$item->type_id || !isset($typeById[$item->type_id])) {
+                        \Log::warning("Item ID {$item->id} memiliki type_id tidak valid: {$item->type_id}");
+                        continue;
+                    }
+
+                    // Cek apakah transaksi ini sudah diproses (mencegah duplikasi)
+                    $transactionKey = $item->id . '-' . $item->type_id;
+                    if (in_array($transactionKey, $processedTransactions)) {
+                        if ($isDebugDate) {
+                            \Log::warning("Melewati transaksi duplikat: " . $transactionKey);
+                        }
+                        continue;
+                    }
+                    $processedTransactions[] = $transactionKey;
+
+                    $type = $typeById[$item->type_id];
+                    $code = strtolower($type->code);
+
+                    // Debug info
+                    if ($isDebugDate) {
+                        $debugInfo[] = [
+                            'id' => $item->id,
+                            'type_id' => $item->type_id,
+                            'type_name' => $type->name,
+                            'code' => $code,
+                            'is_income' => $type->is_income ? 'Ya' : 'Tidak',
+                            'nilai' => $item->nilai,
+                            'waktu' => $item->waktu
+                        ];
+                    }
+
+                    // Langsung hitung pendapatan atau pengeluaran
+                    if ($type->is_income) {
+                        $totalPendapatanHariIni += $item->nilai;
+                        $data->penjualan += $item->nilai;
+                    } else {
+                        $totalPengeluaranHariIni += $item->nilai;
+                    }
+
+                    // Tambahkan ke kategori yang sesuai
+                    if (property_exists($data, $code)) {
+                        $data->$code += $item->nilai;
+                    } else {
+                        \Log::warning("Property $code tidak ditemukan untuk type_id {$item->type_id}");
+                    }
+                } catch (\Exception $e) {
+                    \Log::error("Error processing item: " . $e->getMessage(), [
+                        'item_id' => $item->id ?? 'unknown',
+                        'date' => $date_str
+                    ]);
+                }
+            }
+
+            // PERBAIKAN: Gunakan langsung total pendapatan - total pengeluaran
+            // tanpa menghitung ulang dari kategori untuk menghindari duplikasi
+            $data->tb1_jumlah = $totalPendapatanHariIni - $totalPengeluaranHariIni;
+
+            // Hanya untuk verifikasi dan debugging
+            $totalPendapatan = 0;
+            $totalPengeluaran = 0;
+            $logItemPengeluaran = [];
+
+            // Hitung total pengeluaran untuk log/debugging
+            foreach ($expenseTypes as $type) {
+                $code = strtolower($type->code);
+                if (property_exists($data, $code) && $data->$code > 0) {
+                    $totalPengeluaran += $data->$code;
+                    if ($isDebugDate) {
+                        \Log::info("Pengeluaran {$type->name} ({$code}): " . $data->$code);
+                        $logItemPengeluaran[] = "Tipe: {$type->name}, Kode: {$code}, Nilai: {$data->$code}";
+                    }
+                }
+            }
+
+            // Tambahkan log untuk debugging
+            if(env('APP_DEBUG', false)){
+                if ($isDebugDate) {
+                    \Log::info("HASIL PERBAIKAN - Tanggal: " . $tanggal .
+                               ", Pendapatan: " . $totalPendapatanHariIni .
+                               ", Pengeluaran: " . $totalPengeluaranHariIni .
+                               ", tb1_jumlah: " . $data->tb1_jumlah);
+                    \Log::info("VERIFIKASI - Penjualan: " . $data->penjualan . ", Total Pengeluaran (verifikasi): " . $totalPengeluaran);
+
+                    if (empty($logItemPengeluaran)) {
+                        \Log::info("DETAIL PENGELUARAN - Tanggal: " . $tanggal . " - Tidak ada pengeluaran");
+                    } else {
+                        \Log::info("DETAIL PENGELUARAN - Tanggal: " . $tanggal . ", Items: " . implode(", ", $logItemPengeluaran));
+                    }
+
+                    // Log semua transaksi pada tanggal ini
+                    foreach ($debugInfo as $index => $info) {
+                        \Log::info("TRANSAKSI #{$index} - " . json_encode($info, JSON_PRETTY_PRINT));
+                    }
+
+                    \Log::info("======== SELESAI DEBUG TANGGAL 02-05-2025 ========");
+                }
+            }
+            $result[] = $data;
         }
-        return $data;
+
+        return $result;
     }
-    public static function getTotaldata(): array
+
+    public static function getTotaldata($tenantId = null)
     {
-        $data['total_penjualan'] = static::getTotalNilai(['QRIS', 'TUNAI']);
-        $data['total_qris'] = static::getTotalNilai(['QRIS']);
-        $data['total_tunai'] = static::getTotalNilai(['TUNAI']);
-        $data['total_bbaku'] = static::getTotalNilai(['B_BAKU']);
-        $data['total_peralatan'] = static::getTotalNilai(['PERALATAN']);
-        $data['total_band'] = static::getTotalNilai(['BAND']);
-        $data['total_listrik'] = static::getTotalNilai(['LISTRIK']);
-        $data['total_gas'] = static::getTotalNilai(['GAS']);
-        $data['total_refund'] = static::getTotalNilai(['REFUND']);
-        $data['total_kasbon'] = static::getTotalNilai(['KASBON']);
-        $data['total_owner'] = static::getTotalNilai(['OWNER']);
-        $data['total_compliment'] = static::getTotalNilai(['COMPLIMENT']);
-        $data['total_bpjs'] = static::getTotalNilai(['BPJS']);
-        $data['total_makassar_bb'] = static::getTotalNilai(['BB_MAKASSAR']);
-        $data['total_pajak'] = static::getTotalNilai(['PAJAK']);
-        $data['total_tax'] = static::getTotalNilai(['TAX']);
-        $data['total_gaji'] = static::getTotalNilai(['GAJI']);
-        $data['total_cucipiring'] = static::getTotalNilai(['GAJI_C_PIRING']);
-        $data['total_pengeluaran'] = $data['total_bbaku'] + $data['total_peralatan'] + $data['total_band'] + $data['total_listrik']
-            + $data['total_gas'] + $data['total_refund'] + $data['total_kasbon'] + $data['total_owner'] + $data['total_compliment']
-            + $data['total_bpjs'] + $data['total_makassar_bb'] + $data['total_pajak'] + $data['total_tax'] + $data['total_gaji'] + $data['total_cucipiring'];
-        $data['total_laba'] = static::getTotalNilai(['QRIS', 'TUNAI']) - $data['total_pengeluaran'];
-        $data['total_laba_80'] = $data['total_laba'] * 0.8;
-        $data['total_laba_20'] = $data['total_laba'] * 0.2;
-        return $data;
-    }
-    public static function table(Table $table): Table
-    {
-        $selectedMonth = session('selected_month');
-        if ($selectedMonth) {
+        // Ambil tipe pendapatan dan pengeluaran yang aktif
+        $incomeTypes = CashInOutType::where('is_income', true)
+                    ->where('is_active', true)
+                    ->orderBy('sort_order')
+                    ->get();
+
+        $expenseTypes = CashInOutType::where('is_income', false)
+                    ->where('is_active', true)
+                    ->orderBy('sort_order')
+                    ->get();
+
+        // Bentuk untuk pencarian cepat tipe berdasarkan ID
+        $typeById = [];
+        foreach ($incomeTypes as $type) {
+            $typeById[$type->id] = $type;
+        }
+        foreach ($expenseTypes as $type) {
+            $typeById[$type->id] = $type;
+        }
+
+        $result = [];
+        $result['total_penjualan'] = 0;
+        $result['total_pengeluaran'] = 0;
+        $result['total_income'] = 0;
+        $result['total_qty'] = 0; // Inisialisasi total quantity
+
+        // Inisialisasi total untuk semua tipe pendapatan
+        foreach ($incomeTypes as $type) {
+            $code = strtolower($type->code);
+            $result['total_' . $code] = 0;
+        }
+
+        // Inisialisasi total untuk semua tipe pengeluaran
+        foreach ($expenseTypes as $type) {
+            $code = strtolower($type->code);
+            $result['total_' . $code] = 0;
+        }
+
+        // Ambil bulan yang dipilih dari session
+        $selectedMonth = session('selected_month', now()->format('Y-m'));
+
+        try {
+            // Parse tanggal dari session atau gunakan bulan ini
+            $date = Carbon::createFromFormat('Y-m', $selectedMonth);
+            $startDate = $date->copy()->startOfMonth();
+            $endDate = $date->copy()->endOfMonth();
+        } catch (\Exception $e) {
+            // Default ke bulan ini jika ada error
+            $startDate = now()->startOfMonth();
+            $endDate = now()->endOfMonth();
+            \Log::error("Error parsing date in getTotaldata: " . $e->getMessage());
+        }
+
+        // Query data dengan filter tenant dan tanggal
+        $query = mCashInOut::query()
+            ->with('type') // Eager load type
+            ->whereDate('waktu', '>=', $startDate)
+            ->whereDate('waktu', '<=', $endDate);
+
+        // Filter berdasarkan tenant jika ada
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        // Ambil data
+        $cashinouts = $query->get();
+
+        // Hitung total quantity untuk periode ini berdasarkan range tanggal
+        $result['total_qty'] = \App\Models\TransactionItems::whereBetween('waktu', [
+                $startDate->startOfDay()->toDateTimeString(),
+                $endDate->endOfDay()->toDateTimeString()
+            ])
+            ->join('items', 'transaction_items.item_id', '=', 'items.id')
+            ->where('items.tenant_id', $tenantId)
+            ->sum('quantity');
+
+        // Hitung total per kategori
+        foreach ($cashinouts as $item) {
             try {
-                $selectedMonth = \Carbon\Carbon::parse($selectedMonth)->format('Y-m');
-                $date = \Carbon\Carbon::createFromFormat('Y-m', $selectedMonth);
-                $startDate = $date->copy()->startOfMonth()->toDateString();
-                $endDate = $date->copy()->endOfMonth()->toDateString();
+                // Pastikan type_id ada dan valid
+                if (!$item->type_id || !isset($typeById[$item->type_id])) {
+                    \Log::warning("Item ID {$item->id} memiliki type_id tidak valid: {$item->type_id}");
+                    continue;
+                }
+
+                $type = $typeById[$item->type_id];
+                $code = strtolower($type->code);
+
+                // Cek apakah ini pendapatan
+                if ($type->is_income) {
+                    $result['total_income'] += $item->nilai;
+                    $result['total_penjualan'] += $item->nilai;
+                } else {
+                    $result['total_pengeluaran'] += $item->nilai;
+                }
+
+                // Tambahkan ke kategori yang sesuai
+                $key = 'total_' . $code;
+                if (isset($result[$key])) {
+                    $result[$key] += $item->nilai;
+                } else {
+                    \Log::warning("Key $key tidak ditemukan untuk type_id {$item->type_id}");
+                }
             } catch (\Exception $e) {
-                $startDate = now()->startOfMonth()->toDateString();
-                $endDate = now()->endOfMonth()->toDateString();
+                \Log::error("Error processing item in getTotaldata: " . $e->getMessage(), [
+                    'item_id' => $item->id ?? 'unknown'
+                ]);
+            }
+        }
+
+        // Hitung laba kotor
+        $result['total_laba'] = $result['total_income'] - $result['total_pengeluaran'];
+
+        // Ambil data tenant dan pembagian hasil
+        $tenant = \App\Models\Tenant::with('profitSharings')
+            ->where('id', $tenantId)
+            ->first();
+
+        if ($tenant) {
+            $profitSharings = $tenant->profitSharings()
+                ->where('is_active', true)
+                ->orderBy('is_default', 'desc')
+                ->get();
+
+            // Tambahkan data pembagian hasil ke array data
+            foreach ($profitSharings as $sharing) {
+                $key = 'total_laba_' . Str::slug($sharing->name);
+                $result[$key] = $result['total_laba'] * ($sharing->percentage / 100);
+            }
+
+            // Jika tidak ada pembagian hasil, gunakan default 80/20
+            if ($profitSharings->isEmpty()) {
+                $result['total_laba_80'] = $result['total_laba'] * 0.8;
+                $result['total_laba_20'] = $result['total_laba'] * 0.2;
             }
         } else {
-            $startDate = now()->startOfMonth()->toDateString();
-            $endDate = now()->endOfMonth()->toDateString();
+            // Fallback ke 80/20 jika tidak ada tenant
+            $result['total_laba_80'] = $result['total_laba'] * 0.8;
+            $result['total_laba_20'] = $result['total_laba'] * 0.2;
         }
 
+        return $result;
+    }
+
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+
+        // Admin/superadmin dan user dengan tenant_id dapat mengakses resource ini
+        return $user && ($user->isAdministrator() || $user->tenant_id);
+    }
+
+    public static function table(Table $table): Table
+    {
+        $selectedMonth = session('selected_month', now()->format('Y-m'));
+
+        // Ambil user yang sedang login
+        $user = auth()->user();
+
+        // Tentukan tenant_id berdasarkan role
+        $tenantId = null;
+
+        if ($user->isAdministrator()) {
+            // Untuk admin, ambil tenant_id dari session jika ada
+            $tenantId = session('selected_tenant_id');
+        } else {
+            // Untuk tenant, gunakan tenant_id mereka
+            $tenantId = $user->tenant_id;
+        }
+
+        // Parse tanggal
+        try {
+            $date = Carbon::createFromFormat('Y-m', $selectedMonth);
+            $startDate = $date->copy()->startOfMonth()->format('Y-m-d');
+            $endDate = $date->copy()->endOfMonth()->format('Y-m-d');
+        } catch (\Exception $e) {
+            // Default ke bulan ini jika ada error parsing
+            $startDate = now()->startOfMonth()->format('Y-m-d');
+            $endDate = now()->endOfMonth()->format('Y-m-d');
+
+            // Log error untuk debugging
+            \Log::error("Error parsing date: " . $e->getMessage());
+        }
+
+        // Get tenant data
+        $tenant = \App\Models\Tenant::find($tenantId);
+
+        // Ambil data profit sharing untuk tenant
+        $profitSharings = collect([]);
+        if ($tenant) {
+            try {
+                $profitSharings = \App\Models\ProfitSharing::where('tenant_id', $tenant->id)
+                    ->where('is_active', true)
+                    ->orderBy('percentage', 'desc')
+                    ->get();
+            } catch (\Exception $e) {
+                \Log::error("Error getting profit sharing: " . $e->getMessage());
+            }
+        }
+
+        // Gunakan view yang berbeda berdasarkan role
+        if ($user->isAdministrator()) {
         return $table
             ->view('filament.resources.custom-cash-in-out-table.table', [
-                'records' => static::getTableData($startDate, $endDate),
-                'totald' => static::getTotaldata()
-            ])
-            ->headerActions([
-                Tables\Actions\Action::make('export')
-                    ->label('Export Excel')
-                    ->action(function () use ($startDate, $endDate) {
-                        $data = static::getTableData($startDate, $endDate);
-                        $totald = static::getTotaldata();
-
-                        $spreadsheet = new Spreadsheet();
-                        $sheet = $spreadsheet->getActiveSheet();
-
-                        // Set headers
-                        $headers = [
-                            'Tanggal', 'Penjualan', 'QRIS', 'Tunai', 'Bahan Baku',
-                            'Peralatan', 'Band', 'Listrik', 'Gas', 'Refund',
-                            'Kasbon', 'Owner', 'Compliment', 'BPJS', 'Jumlah'
-                        ];
-
-                        foreach ($headers as $key => $header) {
-                            $col = chr(65 + $key); // A, B, C, etc.
-                            $sheet->setCellValue($col . '1', $header);
-                            // Style header
-                            $sheet->getStyle($col . '1')->getFont()->setBold(true);
-                        }
-
-                        // Fill data
-                        $row = 2;
-                        foreach ($data as $item) {
-                            $sheet->setCellValue('A' . $row, $item->tanggal);
-                            $sheet->setCellValue('B' . $row, 'Rp ' . number_format($item->penjualan, 0, ',', '.'));
-                            $sheet->setCellValue('C' . $row, 'Rp ' . number_format($item->qris, 0, ',', '.'));
-                            $sheet->setCellValue('D' . $row, 'Rp ' . number_format($item->tunai, 0, ',', '.'));
-                            $sheet->setCellValue('E' . $row, 'Rp ' . number_format($item->b_baku, 0, ',', '.'));
-                            $sheet->setCellValue('F' . $row, 'Rp ' . number_format($item->peralatan, 0, ',', '.'));
-                            $sheet->setCellValue('G' . $row, 'Rp ' . number_format($item->band, 0, ',', '.'));
-                            $sheet->setCellValue('H' . $row, 'Rp ' . number_format($item->listrik, 0, ',', '.'));
-                            $sheet->setCellValue('I' . $row, 'Rp ' . number_format($item->gas, 0, ',', '.'));
-                            $sheet->setCellValue('J' . $row, 'Rp ' . number_format($item->refund, 0, ',', '.'));
-                            $sheet->setCellValue('K' . $row, 'Rp ' . number_format($item->kasbon, 0, ',', '.'));
-                            $sheet->setCellValue('L' . $row, 'Rp ' . number_format($item->owner, 0, ',', '.'));
-                            $sheet->setCellValue('M' . $row, 'Rp ' . number_format($item->compliment, 0, ',', '.'));
-                            $sheet->setCellValue('N' . $row, 'Rp ' . number_format($item->bpjs, 0, ',', '.'));
-                            $sheet->setCellValue('O' . $row, 'Rp ' . number_format($item->tb1_jumlah, 0, ',', '.'));
-
-                            // Set format cells sebagai text untuk mempertahankan format angka
-                            $sheet->getStyle('B'.$row.':O'.$row)->getNumberFormat()->setFormatCode('@');
-                            $row++;
-                        }
-
-                        // Add totals row
-                        $totalRow = $row;
-                        $sheet->setCellValue('A' . $totalRow, 'TOTAL');
-                        $sheet->setCellValue('B' . $totalRow, 'Rp ' . number_format($totald['total_penjualan'], 0, ',', '.'));
-                        $sheet->setCellValue('C' . $totalRow, 'Rp ' . number_format($totald['total_qris'], 0, ',', '.'));
-                        $sheet->setCellValue('D' . $totalRow, 'Rp ' . number_format($totald['total_tunai'], 0, ',', '.'));
-                        $sheet->setCellValue('E' . $totalRow, 'Rp ' . number_format($totald['total_bbaku'], 0, ',', '.'));
-                        $sheet->setCellValue('F' . $totalRow, 'Rp ' . number_format($totald['total_peralatan'], 0, ',', '.'));
-                        $sheet->setCellValue('G' . $totalRow, 'Rp ' . number_format($totald['total_band'], 0, ',', '.'));
-                        $sheet->setCellValue('H' . $totalRow, 'Rp ' . number_format($totald['total_listrik'], 0, ',', '.'));
-                        $sheet->setCellValue('I' . $totalRow, 'Rp ' . number_format($totald['total_gas'], 0, ',', '.'));
-                        $sheet->setCellValue('J' . $totalRow, 'Rp ' . number_format($totald['total_refund'], 0, ',', '.'));
-                        $sheet->setCellValue('K' . $totalRow, 'Rp ' . number_format($totald['total_kasbon'], 0, ',', '.'));
-                        $sheet->setCellValue('L' . $totalRow, 'Rp ' . number_format($totald['total_owner'], 0, ',', '.'));
-                        $sheet->setCellValue('M' . $totalRow, 'Rp ' . number_format($totald['total_compliment'], 0, ',', '.'));
-                        $sheet->setCellValue('N' . $totalRow, 'Rp ' . number_format(collect($data)->sum('bpjs'), 0, ',', '.'));
-                        $sheet->setCellValue('O' . $totalRow, 'Rp ' . number_format(collect($data)->sum('tb1_jumlah'), 0, ',', '.'));
-
-                        // Style total row
-                        $sheet->getStyle('A' . $totalRow . ':O' . $totalRow)->getFont()->setBold(true);
-
-                        // Auto-size columns
-                        foreach (range('A', 'O') as $col) {
-                            $sheet->getColumnDimension($col)->setAutoSize(true);
-                        }
-
-                        // Create the Excel file
-                        $writer = new Xlsx($spreadsheet);
-
-                        // Save to temp file and return response
-                        $temp_file = tempnam(sys_get_temp_dir(), 'cash-flow');
-                        $writer->save($temp_file);
-
-                        return response()->download($temp_file, 'cash-flow-' . now()->format('Y-m-d') . '.xlsx')
-                            ->deleteFileAfterSend(true);
-                    })
-            ])
+                    'records' => static::getTableData($startDate, $endDate, $tenantId),
+                    'totalData' => static::getTotaldata($tenantId),
+                    'expenseTypes' => CashInOutType::where('is_income', false)
+                                        ->where('is_active', true)
+                                        ->when($tenantId, function($query) use ($tenantId) {
+                                            $query->where(function($q) use ($tenantId) {
+                                                $q->where('tenant_id', $tenantId)
+                                                  ->orWhereNull('tenant_id');
+                                            });
+                                        }, function($query) {
+                                            $query->whereNull('tenant_id');
+                                        })
+                                        ->orderBy('sort_order')
+                                        ->get(),
+                    'incomeTypes' => CashInOutType::where('is_income', true)
+                                        ->where('is_active', true)
+                                        ->when($tenantId, function($query) use ($tenantId) {
+                                            $query->where(function($q) use ($tenantId) {
+                                                $q->where('tenant_id', $tenantId)
+                                                  ->orWhereNull('tenant_id');
+                                            });
+                                        }, function($query) {
+                                            $query->whereNull('tenant_id');
+                                        })
+                                        ->orderBy('sort_order')
+                                        ->get(),
+                    'profitSharings' => $profitSharings,
+                    'tenant' => $tenant,
+                    'tenantId' => $tenantId,
+                    'tenantName' => $tenant ? $tenant->name : 'Semua Tenant',
+                    'formattedMonth' => Carbon::parse($selectedMonth)->format('F Y'),
+                ])
+                ->headerActions([])
+                ->filters([
+                    Filter::make('month')
+                        ->form([
+                            Forms\Components\DatePicker::make('month')
+                                ->label('Bulan')
+                                ->default(now())
+                                ->displayFormat('F Y')
+                                ->format('Y-m')
+                        ])
+                        ->query(function (Builder $query, array $data): Builder {
+                            if (isset($data['month'])) {
+                                session(['selected_month' => $data['month']]);
+                                return $query;
+                            }
+                            return $query;
+                        }),
+                ])
+                ->actions([])
+                ->bulkActions([])
+                ->poll('');
+        } else {
+            // Tetap gunakan view tenant untuk non-admin
+            return $table
+                ->view('filament.resources.custom-cash-in-out-table.tenant-table', [
+                    'records' => static::getTableData($startDate, $endDate, $tenantId),
+                    'totalData' => static::getTotaldata($tenantId),
+                    'expenseTypes' => CashInOutType::where('is_income', false)
+                                        ->where('is_active', true)
+                                        ->where(function($query) use ($tenantId) {
+                                            $query->where('tenant_id', $tenantId)
+                                                  ->orWhereNull('tenant_id');
+                                        })
+                                        ->orderBy('sort_order')
+                                        ->get(),
+                    'incomeTypes' => CashInOutType::where('is_income', true)
+                                        ->where('is_active', true)
+                                        ->where(function($query) use ($tenantId) {
+                                            $query->where('tenant_id', $tenantId)
+                                                  ->orWhereNull('tenant_id');
+                                        })
+                                        ->orderBy('sort_order')
+                                        ->get(),
+                    'profitSharings' => $profitSharings,
+                    'tenant' => $tenant,
+                    'tenantId' => $tenantId,
+                    'tenantName' => $tenant ? $tenant->name : '',
+                    'formattedMonth' => Carbon::parse($selectedMonth)->format('F Y'),
+                ])
+                ->headerActions([])
             ->filters([
-                //
-            ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+                    Filter::make('month')
+                        ->form([
+                            Forms\Components\DatePicker::make('month')
+                                ->label('Bulan')
+                                ->default(now())
+                                ->displayFormat('F Y')
+                                ->format('Y-m')
+                        ])
+                        ->query(function (Builder $query, array $data): Builder {
+                            if (isset($data['month'])) {
+                                session(['selected_month' => $data['month']]);
+                                return $query;
+                            }
+                            return $query;
+                        }),
+                ])
+                ->actions([])
+                ->bulkActions([])
+                ->poll('');
+        }
     }
 
     public static function getRelations(): array

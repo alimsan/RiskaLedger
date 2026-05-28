@@ -11,7 +11,7 @@ class ActivityLogs extends Model
     protected $table = 'activity_log';
 
     public function user(){
-        return $this->belongsTo(User::class,' causer_id');
+        return $this->belongsTo(User::class,'causer_id');
     }
     public function getActivitylogOptions(): LogOptions
     {

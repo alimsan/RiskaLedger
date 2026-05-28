@@ -38,6 +38,9 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 Widgets\AccountWidget::class,
+                \App\Filament\Widgets\DateFilterWidget::class,
+                \App\Filament\Widgets\IncomeExpenseStatWidget::class,
+                \App\Filament\Widgets\YearlyChartWidget::class,
                // Widgets\FilamentInfoWidget::class,
             ])
             ->middleware([

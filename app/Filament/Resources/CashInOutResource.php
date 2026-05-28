@@ -30,10 +30,61 @@ class CashInOutResource extends Resource
     protected static ?string $navigationLabel = 'Cash in out';
     protected static ?string $modelLabel = 'Cash in out';
     protected static ?string $pluralModelLabel = 'Cash in out';
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+
+        // Cek role owner dan manager (akses default)
+        if ($user->hasRole(['owner','manager','admin'])) {
+            return true;
+        }
+
+        // Cek role operator dengan konfigurasi operator_produk
+        if ($user->hasRole('operator')) {
+            $tenantId = $user->tenant_id;
+
+            $operatorProdukConfig = \App\Models\ConfigTenants::where('tenant_id', $tenantId)
+                ->where('name', 'operator_produk')
+                ->where('status', true)
+                ->first();
+
+            return $operatorProdukConfig ? true : false;
+        }
+
+        return false;
+    }
     public static function form(Form $form): Form
     {
+        $user = auth()->user();
+
+        // Jika user adalah admin atau superadmin, tampilkan pilihan tenant
+        // Jika bukan, gunakan tenant_id dari user yang login
+        $tenantField = null;
+
+        if ($user->isAdministrator()) {
+            $tenantField = Select::make('tenant_id')
+                ->label('Tenant')
+                ->relationship('tenant', 'name')
+                ->required()
+                ->searchable()
+                ->preload();
+        } else {
+            $tenantField = TextInput::make('tenant_id')
+                ->label('Tenant')
+                ->default($user->tenant_id)
+                ->disabled()
+                ->dehydrated(true)
+                ->formatStateUsing(function ($state) use ($user) {
+                    return $user->tenant ? $user->tenant->name : 'Tidak ada tenant';
+                });
+        }
+
         return $form
             ->schema([
+                Section::make('Informasi Umum')
+                    ->schema([
+                        $tenantField,
+                    ]),
                 Repeater::make('cash_in_out_entries')
                     ->label('Entri Cash In Out')
                     ->schema([
@@ -42,34 +93,16 @@ class CashInOutResource extends Resource
                             ->nullable()
                             ->columnSpanFull(),
 
-                        Select::make('type')
+                        Select::make('type_id')
                             ->label('Tipe')
-                            ->options([
-                                'B_BAKU' => 'Bahan Baku',
-                                'PERALATAN' => 'Peralatan',
-                                'BAND' => 'Band',
-                                'LISTRIK' => 'Listrik',
-                                'GAS' => 'Gas',
-                                'REFUND' => 'Refund',
-                                'KASBON' => 'Kasbon',
-                                'OWNER' => 'Owner',
-                                'COMPLIMENT' => 'Compliment',
-                                'BPJS' => 'BPJS',
-                                'QRIS' => 'QRIS',
-                                'TUNAI' => 'Tunai',
-                                'PAJAK' => 'Pajak',
-                                'TAX' => 'TAX 5%',
-                                'GAJI' => 'Gaji',
-                                'GAJI_C_PIRING' => 'Gaji Cuci Piring',
-                                'BB_MAKASSAR'=> 'Makassar Bahan Baku',
-                            ])
-                            ->default('QRIS')
+                            ->relationship('type', 'name', function ($query) use ($user) {
+                                // Filter tipe berdasarkan tenant jika user bukan admin
+                                if (!$user->isAdministrator()) {
+                                    $query->where('tenant_id', $user->tenant_id);
+                                }
+                            })
                             ->required()
-                            ->live() // Tambahkan live()
-                            ->afterStateUpdated(function (Set $set, $state) {
-                                $peemasukanTypes = ['QRIS', 'TUNAI'];
-                                $set('tipe_cio', in_array($state, $peemasukanTypes) ? 1 : 2);
-                            }),
+                            ->live(),
                         TextInput::make('nilai')
                             ->label('Nilai')
                             ->numeric()
@@ -80,18 +113,6 @@ class CashInOutResource extends Resource
                             ->closeOnDateSelection()
                             ->native(false)
                             ->label('Waktu')
-                            ->required(),
-                        Select::make('tipe_cio')
-                            ->label('Tipe Transaksi')
-                            ->options([
-                                1 => 'Pemasukan',
-                                2 => 'Pengeluaran'
-                            ])
-                            ->default(function (Get $get) {
-                                $peemasukanTypes = ['QRIS', 'TUNAI'];
-                                return in_array($get('type'), $peemasukanTypes) ? 1 : 2;
-                            })
-                            ->live()
                             ->required(),
                         Textarea::make('deksripsi')
                             ->label('Deskripsi')
@@ -106,38 +127,61 @@ class CashInOutResource extends Resource
 
     public static function table(Table $table): Table
     {
+        $user = auth()->user();
+
+        // Filter data berdasarkan tenant user jika bukan admin
+        $query = function (Builder $query) use ($user) {
+            if (!$user->isAdministrator()) {
+                $query->where('tenant_id', $user->tenant_id);
+            }
+        };
+
+        $columns = [
+            TextColumn::make('nama_barang')
+                ->label('Nama Barang')
+                ->searchable(),
+            TextColumn::make('type.name')
+                ->label('Tipe')
+                ->searchable(),
+            TextColumn::make('type.is_income')
+                ->label('Status')
+                ->formatStateUsing(fn ($state): string => $state ? 'Pemasukan' : 'Pengeluaran')
+                ->badge()
+                ->color(fn ($state): string => $state ? 'success' : 'danger')
+                ->icon(fn ($state): string => $state ? 'heroicon-o-arrow-down' : 'heroicon-o-arrow-up'),
+            TextColumn::make('keterangan')
+                ->label('Keterangan')
+                ->html()
+                ->formatStateUsing(fn ($state) => nl2br(e($state))),
+            TextColumn::make('nilai')
+                ->label('Nilai')
+                ->formatStateUsing(function ($state) {
+                    return 'Rp ' . number_format($state, 0, ',', '.');
+                })
+                ->sortable(),
+            TextColumn::make('deksripsi')
+                ->label('Deskripsi')
+                ->limit(30)
+                ->toggleable(isToggledHiddenByDefault: true),
+            TextColumn::make('waktu')
+                ->label('Waktu Transaksi')
+                ->dateTime('d M Y H:i')
+                ->sortable(),
+        ];
+
+        // Jika user adalah admin, tambahkan kolom tenant
+        if ($user->isAdministrator()) {
+            array_splice($columns, 1, 0, [
+                TextColumn::make('tenant.name')
+                    ->label('Tenant')
+                    ->sortable()
+                    ->searchable()
+            ]);
+        }
+
         return $table
-            ->columns([
-                TextColumn::make('nama_barang')
-                    ->label('Nama Barang'),
-                TextColumn::make('type')
-                    ->label('Tipe')
-                    ->searchable(),
-                BadgeColumn::make('tipe_cio')
-                    ->label('Tipe Transaksi')
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
-                        '1' => 'Pemasukan',
-                        '2' => 'Pengeluaran',
-                        default => 'Tidak Diketahui'
-                    })
-                    ->colors([
-                        'success' => 1,
-                        'danger' => 2,
-                    ])
-                    ->icon(fn(string $state): string => match ($state) {
-                        '1' => 'heroicon-o-arrow-down-tray',
-                        '2' => 'heroicon-o-arrow-up-tray',
-                        default => 'heroicon-o-question-mark-circle'
-                    }),
-                TextColumn::make('nilai')
-                    ->label('Nilai')
-                    ->formatStateUsing(function ($state) {
-                        return 'Rp ' . number_format($state, 0, ',', '.');
-                    }),
-                TextColumn::make('waktu')
-                    ->label('Waktu Transaksi')
-                    ->dateTime('d M Y'),
-            ])->defaultSort('waktu', 'desc')
+            ->modifyQueryUsing($query)
+            ->columns($columns)
             ->filters([
                 \Filament\Tables\Filters\Filter::make('waktu')
                     ->form([
@@ -173,9 +217,16 @@ class CashInOutResource extends Resource
                 \Filament\Tables\Filters\Filter::make('bulan_ini')
                     ->label('Bulan Ini')
                     ->query(fn($query) => $query->whereBetween('waktu', [now()->startOfMonth(), now()->endOfMonth()])),
+
+                // Filter tenant (hanya untuk administrator)
+                \Filament\Tables\Filters\SelectFilter::make('tenant_id')
+                    ->label('Tenant')
+                    ->relationship('tenant', 'name')
+                    ->visible(fn () => $user->isAdministrator()),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
