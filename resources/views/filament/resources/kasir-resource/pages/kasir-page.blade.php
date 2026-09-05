@@ -1,4 +1,483 @@
-<x-filament::page x-data="checkoutFunctions">
+<script>
+    window.checkoutFunctions = function() {
+        return {
+            // State untuk mesin scanner barcode
+            isScannerActive: false,
+            scannerStatus: 'Mesin Scanner Terhubung & Siap Scan',
+            audioCtx: null,
+
+            init() {
+                // Global hotkey F2 untuk toggle mode scanner barcode
+                window.addEventListener('keydown', (e) => {
+                    if (e.key === 'F2') {
+                        e.preventDefault();
+                        this.toggleScannerMode();
+                    }
+                });
+
+                // Tangani event scanner-result dari Livewire
+                window.addEventListener('scanner-result', (event) => {
+                    const data = Array.isArray(event.detail) ? event.detail[0] : event.detail;
+                    if (!data) return;
+                    if (data.success) {
+                        this.playBeep(true);
+                    } else {
+                        this.playBeep(false);
+                    }
+                });
+
+                // Deteksi global input cepat dari hardware scanner barcode
+                let keyBuffer = '';
+                let lastKeyTime = Date.now();
+
+                window.addEventListener('keydown', (e) => {
+                    if (!this.isScannerActive) return;
+
+                    const activeEl = document.activeElement;
+                    const searchInput = document.getElementById('search-product-input');
+
+                    // Jika sedang fokus pada input lain selain search, jangan intersep
+                    if (activeEl && activeEl !== searchInput && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+                        return;
+                    }
+
+                    const now = Date.now();
+                    const timeDiff = now - lastKeyTime;
+                    lastKeyTime = now;
+
+                    if (e.key === 'Enter') {
+                        if (keyBuffer.length >= 2 && timeDiff < 90) {
+                            e.preventDefault();
+                            if (searchInput) {
+                                searchInput.value = keyBuffer;
+                                searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                            this.handleBarcodeScan(keyBuffer);
+                            keyBuffer = '';
+                        } else {
+                            keyBuffer = '';
+                        }
+                    } else if (e.key.length === 1) {
+                        if (timeDiff < 90 || keyBuffer.length === 0) {
+                            keyBuffer += e.key;
+                        } else {
+                            keyBuffer = e.key;
+                        }
+                    }
+                });
+            },
+
+            checkScannerDevice() {
+                if (navigator.hid) {
+                    navigator.hid.getDevices().then(devices => {
+                        if (devices && devices.length > 0) {
+                            this.scannerStatus = 'Mesin Scanner Terhubung (' + (devices[0].productName || 'USB Barcode Scanner') + ')';
+                        } else {
+                            this.scannerStatus = 'Mesin Scanner Terhubung (Mode HID Keyboard)';
+                        }
+                    }).catch(() => {
+                        this.scannerStatus = 'Mesin Scanner Terhubung (Mode HID Keyboard)';
+                    });
+                } else {
+                    this.scannerStatus = 'Mesin Scanner Terhubung (Mode HID Keyboard)';
+                }
+            },
+
+            toggleScannerMode(forceState = null) {
+                this.isScannerActive = forceState !== null ? forceState : !this.isScannerActive;
+                if (this.isScannerActive) {
+                    this.checkScannerDevice();
+                    this.playBeep(true);
+                    this.$nextTick(() => {
+                        const searchInput = document.getElementById('search-product-input');
+                        if (searchInput) {
+                            searchInput.focus();
+                            searchInput.select();
+                        }
+                    });
+                }
+            },
+
+            handleSearchKeydown(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = (e.target.value || '').trim();
+                    if (val) {
+                        this.handleBarcodeScan(val);
+                    }
+                }
+            },
+
+            handleBarcodeScan(code) {
+                const cleanCode = (code || '').trim();
+                if (!cleanCode) return;
+
+                // Pastikan nilai input Cari Produk terisi dengan barcode yang di-scan
+                const searchInput = document.getElementById('search-product-input');
+                if (searchInput && searchInput.value !== cleanCode) {
+                    searchInput.value = cleanCode;
+                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+
+                // Panggil method Livewire scanBarcode
+                const caller = (this.$wire || @this);
+                if (caller) {
+                    if (typeof caller.scanBarcode === 'function') {
+                        caller.scanBarcode(cleanCode);
+                    } else if (typeof caller.call === 'function') {
+                        caller.call('scanBarcode', cleanCode);
+                    }
+                }
+
+                // Tetap fokuskan kursor ke input Cari Produk untuk scan barcode selanjutnya
+                this.$nextTick(() => {
+                    if (searchInput && this.isScannerActive) {
+                        searchInput.focus();
+                        searchInput.select();
+                    }
+                });
+            },
+
+            playBeep(isSuccess = true) {
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioContext) return;
+
+                    if (!this.audioCtx) {
+                        this.audioCtx = new AudioContext();
+                    }
+
+                    if (this.audioCtx.state === 'suspended') {
+                        this.audioCtx.resume();
+                    }
+
+                    const osc = this.audioCtx.createOscillator();
+                    const gainNode = this.audioCtx.createGain();
+                    osc.connect(gainNode);
+                    gainNode.connect(this.audioCtx.destination);
+
+                    if (isSuccess) {
+                        // Beep sukses standar mesin kasir (nada tinggi 1200Hz durasi 90ms)
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(1200, this.audioCtx.currentTime);
+                        gainNode.gain.setValueAtTime(0.2, this.audioCtx.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.09);
+                        osc.start();
+                        osc.stop(this.audioCtx.currentTime + 0.09);
+                    } else {
+                        // Buzz gagal/warning (nada rendah 320Hz durasi 200ms)
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(320, this.audioCtx.currentTime);
+                        gainNode.gain.setValueAtTime(0.25, this.audioCtx.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.2);
+                        osc.start();
+                        osc.stop(this.audioCtx.currentTime + 0.2);
+                    }
+                } catch (err) {
+                    console.warn('Audio feedback failed:', err);
+                }
+            },
+
+            initCheckoutForm() {
+                // Reset checkbox values to false
+                document.getElementById('is_piutang').checked = false;
+                document.getElementById('download_receipt').checked = false;
+                document.getElementById('add_buyer_info').checked = false;
+                document.getElementById('custom_time').checked = false;
+
+                // Setup thermal print button
+                this.setupThermalPrintButton();
+
+                // Set nilai default datetime-local ke waktu sekarang
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+                document.getElementById('transaction_time').value = formattedDate;
+
+                // Hide containers initially
+                document.getElementById('vendor_select_container').classList.add('hidden');
+                document.getElementById('buyer_info_container').classList.add('hidden');
+                document.getElementById('custom_time_container').classList.add('hidden');
+
+                // Clear vendor search field
+                if (document.getElementById('vendor_search')) {
+                    document.getElementById('vendor_search').value = '';
+                    document.getElementById('selected_vendor_id').value = '';
+                }
+
+                // Setup vendor search functionality
+                this.setupVendorSearch();
+            },
+
+            setupVendorSearch() {
+                const searchInput = document.getElementById('vendor_search');
+                const dropdown = document.getElementById('vendor_dropdown');
+                const vendorOptions = document.querySelectorAll('.vendor-option');
+                const hiddenInput = document.getElementById('selected_vendor_id');
+
+                if (!searchInput || !dropdown || !vendorOptions.length) return;
+
+                let activeIndex = -1;
+
+                // Function to highlight active option
+                const setActiveOption = (index) => {
+                    vendorOptions.forEach(opt => opt.classList.remove('bg-gray-100', 'dark:bg-gray-700'));
+                    if (index >= 0 && index < vendorOptions.length) {
+                        const visibleOptions = Array.from(vendorOptions).filter(opt => !opt.classList.contains('hidden'));
+                        if (visibleOptions[index]) {
+                            visibleOptions[index].classList.add('bg-gray-100', 'dark:bg-gray-700');
+                            visibleOptions[index].scrollIntoView({ block: 'nearest' });
+                            activeIndex = index;
+                        }
+                    }
+                };
+
+                // Show dropdown when input is focused
+                searchInput.addEventListener('focus', () => {
+                    dropdown.classList.remove('hidden');
+                    vendorOptions.forEach(option => {
+                        option.classList.remove('hidden');
+                    });
+                });
+
+                // Keep dropdown open during typing
+                searchInput.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    dropdown.classList.remove('hidden');
+                });
+
+                // Hide dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                        dropdown.classList.add('hidden');
+                        activeIndex = -1;
+                    }
+                });
+
+                // Keyboard navigation
+                searchInput.addEventListener('keydown', (e) => {
+                    const visibleOptions = Array.from(vendorOptions).filter(opt => !opt.classList.contains('hidden'));
+
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        dropdown.classList.remove('hidden');
+                        activeIndex = Math.min(activeIndex + 1, visibleOptions.length - 1);
+                        setActiveOption(activeIndex);
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        dropdown.classList.remove('hidden');
+                        activeIndex = Math.max(activeIndex - 1, 0);
+                        setActiveOption(activeIndex);
+                    } else if (e.key === 'Enter' && activeIndex >= 0) {
+                        e.preventDefault();
+                        if (visibleOptions[activeIndex]) {
+                            const value = visibleOptions[activeIndex].dataset.value;
+                            const text = visibleOptions[activeIndex].dataset.text;
+
+                            searchInput.value = text;
+                            hiddenInput.value = value;
+                            dropdown.classList.add('hidden');
+                            activeIndex = -1;
+                        }
+                    } else if (e.key === 'Escape') {
+                        dropdown.classList.add('hidden');
+                        activeIndex = -1;
+                    }
+                });
+
+                // Live search functionality
+                searchInput.addEventListener('input', () => {
+                    const searchValue = searchInput.value.toLowerCase().trim();
+                    let hasVisibleOptions = false;
+
+                    dropdown.classList.remove('hidden');
+                    activeIndex = -1;
+
+                    vendorOptions.forEach(option => {
+                        const text = option.innerText.toLowerCase();
+                        if (text.includes(searchValue)) {
+                            option.classList.remove('hidden');
+                            hasVisibleOptions = true;
+                        } else {
+                            option.classList.add('hidden');
+                        }
+                    });
+
+                    let noResultsEl = dropdown.querySelector('.no-results');
+                    if (!hasVisibleOptions) {
+                        if (!noResultsEl) {
+                            noResultsEl = document.createElement('div');
+                            noResultsEl.className = 'no-results cursor-default select-none relative py-2 px-4 text-gray-500 dark:text-gray-400';
+                            noResultsEl.textContent = 'Tidak ada hasil yang cocok';
+                            dropdown.appendChild(noResultsEl);
+                        }
+                        noResultsEl.classList.remove('hidden');
+                    } else if (noResultsEl) {
+                        noResultsEl.classList.add('hidden');
+                    }
+                });
+
+                // Select vendor when clicking on option
+                vendorOptions.forEach(option => {
+                    option.addEventListener('click', () => {
+                        const value = option.dataset.value;
+                        const text = option.dataset.text;
+
+                        searchInput.value = text;
+                        hiddenInput.value = value;
+                        dropdown.classList.add('hidden');
+                        activeIndex = -1;
+                    });
+                });
+            },
+
+            toggleVendorSelect() {
+                const isPiutang = document.getElementById('is_piutang').checked;
+                document.getElementById('vendor_select_container').classList.toggle('hidden', !isPiutang);
+            },
+
+            toggleBuyerInfo() {
+                const addBuyerInfo = document.getElementById('add_buyer_info').checked;
+                document.getElementById('buyer_info_container').classList.toggle('hidden', !addBuyerInfo);
+            },
+
+            toggleCustomTime() {
+                const customTime = document.getElementById('custom_time').checked;
+                document.getElementById('custom_time_container').classList.toggle('hidden', !customTime);
+            },
+
+            toggleDownloadReceipt() {
+                // Keep consistency
+            },
+
+            setupThermalPrintButton() {
+                const printBtn = document.getElementById('print_thermal_btn');
+                if (!printBtn) return;
+
+                printBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+
+                    const typeId = document.getElementById('payment_method').value;
+                    const isPiutang = document.getElementById('is_piutang').checked;
+                    const vendorId = isPiutang ? document.getElementById('selected_vendor_id').value : null;
+                    const notes = document.getElementById('notes').value;
+
+                    const addBuyerInfo = document.getElementById('add_buyer_info').checked;
+                    const buyerName = addBuyerInfo ? document.getElementById('buyer_name').value : null;
+                    const cashierName = addBuyerInfo ? document.getElementById('cashier_name').value : null;
+
+                    const customTime = document.getElementById('custom_time').checked;
+                    const transactionTime = customTime ? document.getElementById('transaction_time').value : null;
+
+                    if (isPiutang && !vendorId) {
+                        alert('Mohon pilih vendor terlebih dahulu untuk transaksi piutang');
+                        return;
+                    }
+
+                    if (!@json(count($this->cartItems))) {
+                        alert('Keranjang belanja kosong. Silakan tambahkan produk terlebih dahulu.');
+                        return;
+                    }
+
+                    const caller = (this.$wire || @this);
+                    caller.saveCartForPrinting(typeId, isPiutang, vendorId, notes, buyerName, cashierName, transactionTime).then(response => {
+                        const params = new URLSearchParams();
+                        params.append('session_data', 'true');
+                        params.append('type_id', typeId);
+                        params.append('is_piutang', isPiutang);
+                        if (vendorId) params.append('vendor_id', vendorId);
+                        if (notes) params.append('notes', notes);
+                        if (buyerName) params.append('buyer_name', buyerName);
+                        if (cashierName) params.append('cashier_name', cashierName);
+                        if (transactionTime) params.append('transaction_time', transactionTime);
+                        if (addBuyerInfo) params.append('add_buyer_info', addBuyerInfo);
+                        if (customTime) params.append('custom_time', customTime);
+
+                        const newTab = window.open(`{{ route('thermal-print') }}?${params.toString()}`, '_blank');
+                        if (newTab) {
+                            newTab.focus();
+                        }
+                    });
+                });
+            },
+
+            submitCheckout() {
+                const typeId = document.getElementById('payment_method').value;
+                const notes = document.getElementById('notes').value;
+                const isPiutang = document.getElementById('is_piutang').checked;
+
+                let vendorId = null;
+                if (isPiutang) {
+                    vendorId = document.getElementById('selected_vendor_id').value;
+                }
+
+                const downloadReceipt = document.getElementById('download_receipt').checked;
+                const addBuyerInfo = document.getElementById('add_buyer_info').checked;
+                const buyerName = addBuyerInfo ? document.getElementById('buyer_name').value : null;
+                const cashierName = addBuyerInfo ? document.getElementById('cashier_name').value : null;
+                const customTime = document.getElementById('custom_time').checked;
+                const transactionTime = customTime ? document.getElementById('transaction_time').value : null;
+
+                if (isPiutang && !vendorId) {
+                    alert('Silakan pilih vendor terlebih dahulu');
+                    return;
+                }
+
+                const caller = (this.$wire || @this);
+                caller.checkout({
+                    type_id: typeId,
+                    notes: notes,
+                    is_receivable: isPiutang,
+                    vendor_id: vendorId,
+                    download_receipt: downloadReceipt,
+                    buyer_name: buyerName,
+                    cashier_name: cashierName,
+                    transaction_time: transactionTime
+                });
+            }
+        };
+    };
+
+    if (window.Alpine) {
+        window.Alpine.data('checkoutFunctions', window.checkoutFunctions);
+    } else {
+        document.addEventListener('alpine:init', () => {
+            window.Alpine.data('checkoutFunctions', window.checkoutFunctions);
+        });
+    }
+
+    // Menangani event 'close-checkout-modal'
+    window.addEventListener('close-checkout-modal', function() {
+        Livewire.dispatch('close-modal', { id: 'checkout-modal' });
+    });
+
+    // Fungsi untuk refresh halaman baru kemudian buka modal checkout
+    function refreshBeforeCheckout() {
+        if (!sessionStorage.getItem('freshCheckout')) {
+            console.log('Refreshing for checkout...');
+            sessionStorage.setItem('freshCheckout', 'true');
+            window.location.reload();
+            return;
+        }
+
+        console.log('Opening checkout modal after fresh page load');
+        sessionStorage.removeItem('freshCheckout');
+        Livewire.dispatch('open-modal', { id: 'checkout-modal' });
+    }
+
+    if (sessionStorage.getItem('freshCheckout') === 'true') {
+        setTimeout(function() {
+            refreshBeforeCheckout();
+        }, 500);
+    }
+</script>
+
+<x-filament::page x-data="checkoutFunctions()">
     <style>
         /* Style sederhana untuk toggle switch */
         .simple-toggle {
@@ -51,19 +530,50 @@
         <!-- Panel Produk -->
         <div class="md:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-300 dark:border-gray-700 p-4">
             <!-- Search dan Filter -->
-            <div class="mb-4 flex flex-col sm:flex-row gap-4">
-                <div class="flex-1">
-                    <input
-                        type="text"
-                        wire:model.live.debounce.300ms="searchQuery"
-                        placeholder="Cari produk..."
-                        class="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
+            <div class="mb-2 flex flex-col sm:flex-row gap-3">
+                <div class="flex-1 flex gap-2">
+                    <div class="relative flex-1">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+                        <input
+                            type="text"
+                            id="search-product-input"
+                            x-ref="searchInput"
+                            wire:model.live.debounce.300ms="searchQuery"
+                            @keydown="handleSearchKeydown($event)"
+                            placeholder="Cari produk (nama, SKU, atau barcode)..."
+                            :class="isScannerActive ? 'ring-2 ring-emerald-500 border-emerald-500 dark:border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20' : 'border-gray-300 dark:border-gray-700'"
+                            class="w-full pl-9 rounded-lg dark:bg-gray-800 dark:text-white shadow-sm text-sm transition-all"
+                            autocomplete="off"
+                        >
+                    </div>
+
+                    <!-- Tombol Mesin Scanner Barcode -->
+                    <button
+                        type="button"
+                        x-on:click="toggleScannerMode()"
+                        :class="isScannerActive ? 'bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-400 text-white' : 'bg-primary-600 hover:bg-primary-700 text-white'"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg font-medium text-sm shadow-sm transition-all duration-150 whitespace-nowrap cursor-pointer"
+                        title="Klik untuk cek status mesin dan aktifkan scan barcode (Shortcut: F2)"
                     >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                        </svg>
+                        <span x-text="isScannerActive ? 'Scanner Aktif' : 'Scan Barcode'"></span>
+                        <span x-show="isScannerActive" class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                        </span>
+                    </button>
                 </div>
+
                 <div>
                     <select
                         wire:model.live="selectedCategory"
-                        class="rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm"
+                        class="w-full sm:w-auto rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white shadow-sm text-sm"
                     >
                         <option value="">Semua Kategori</option>
                         @foreach($this->categories as $category)
@@ -71,6 +581,37 @@
                         @endforeach
                     </select>
                 </div>
+            </div>
+
+            <!-- Status Koneksi Mesin Scanner -->
+            <div
+                x-show="isScannerActive"
+                x-transition:enter="transition ease-out duration-150"
+                x-transition:enter-start="opacity-0 -translate-y-1"
+                x-transition:enter-end="opacity-100 translate-y-0"
+                x-transition:leave="transition ease-in duration-100"
+                x-transition:leave-start="opacity-100 translate-y-0"
+                x-transition:leave-end="opacity-0 -translate-y-1"
+                class="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-400/60 dark:border-emerald-600/60 rounded-lg flex items-center justify-between gap-2 text-xs"
+            >
+                <div class="flex items-center gap-2">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span class="font-bold text-emerald-800 dark:text-emerald-200" x-text="scannerStatus"></span>
+                    <span class="text-emerald-700 dark:text-emerald-300">| Tembak barcode, hasil scan akan langsung muncul di kolom Cari Produk.</span>
+                </div>
+                <button
+                    type="button"
+                    @click="toggleScannerMode(false)"
+                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    title="Tutup"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
             </div>
 
             <!-- Produk Grid -->
@@ -415,322 +956,4 @@
             </div>
         </x-slot>
     </x-filament::modal>
-
-    <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('checkoutFunctions', () => ({
-                initCheckoutForm() {
-                    // Reset checkbox values to false
-                    document.getElementById('is_piutang').checked = false;
-                    document.getElementById('download_receipt').checked = false;
-                    document.getElementById('add_buyer_info').checked = false;
-                    document.getElementById('custom_time').checked = false;
-
-                    // Setup thermal print button
-                    this.setupThermalPrintButton();
-
-                    // Set nilai default datetime-local ke waktu sekarang
-                    const now = new Date();
-                    // Format tanggal untuk input datetime-local (YYYY-MM-DDThh:mm)
-                    const year = now.getFullYear();
-                    const month = String(now.getMonth() + 1).padStart(2, '0');
-                    const day = String(now.getDate()).padStart(2, '0');
-                    const hours = String(now.getHours()).padStart(2, '0');
-                    const minutes = String(now.getMinutes()).padStart(2, '0');
-                    const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}`;
-
-                    document.getElementById('transaction_time').value = formattedDate;
-
-                    // Hide containers initially
-                    document.getElementById('vendor_select_container').classList.add('hidden');
-                    document.getElementById('buyer_info_container').classList.add('hidden');
-                    document.getElementById('custom_time_container').classList.add('hidden');
-
-                    // Clear vendor search field
-                    if (document.getElementById('vendor_search')) {
-                        document.getElementById('vendor_search').value = '';
-                        document.getElementById('selected_vendor_id').value = '';
-                    }
-
-                    // Setup vendor search functionality
-                    this.setupVendorSearch();
-                },
-
-                setupVendorSearch() {
-                    const searchInput = document.getElementById('vendor_search');
-                    const dropdown = document.getElementById('vendor_dropdown');
-                    const vendorOptions = document.querySelectorAll('.vendor-option');
-                    const hiddenInput = document.getElementById('selected_vendor_id');
-
-                    if (!searchInput || !dropdown || !vendorOptions.length) return;
-
-                    let activeIndex = -1;
-
-                    // Function to highlight active option
-                    const setActiveOption = (index) => {
-                        vendorOptions.forEach(opt => opt.classList.remove('bg-gray-100', 'dark:bg-gray-700'));
-                        if (index >= 0 && index < vendorOptions.length) {
-                            const visibleOptions = Array.from(vendorOptions).filter(opt => !opt.classList.contains('hidden'));
-                            if (visibleOptions[index]) {
-                                visibleOptions[index].classList.add('bg-gray-100', 'dark:bg-gray-700');
-                                visibleOptions[index].scrollIntoView({ block: 'nearest' });
-                                activeIndex = index;
-                            }
-                        }
-                    };
-
-                    // Show dropdown when input is focused
-                    searchInput.addEventListener('focus', () => {
-                        dropdown.classList.remove('hidden');
-                        // Show all options initially
-                        vendorOptions.forEach(option => {
-                            option.classList.remove('hidden');
-                        });
-                    });
-
-                    // Keep dropdown open during typing
-                    searchInput.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        dropdown.classList.remove('hidden');
-                    });
-
-                    // Hide dropdown when clicking outside
-                    document.addEventListener('click', (e) => {
-                        if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
-                            dropdown.classList.add('hidden');
-                            activeIndex = -1;
-                        }
-                    });
-
-                    // Keyboard navigation
-                    searchInput.addEventListener('keydown', (e) => {
-                        const visibleOptions = Array.from(vendorOptions).filter(opt => !opt.classList.contains('hidden'));
-
-                        if (e.key === 'ArrowDown') {
-                            e.preventDefault();
-                            dropdown.classList.remove('hidden');
-                            activeIndex = Math.min(activeIndex + 1, visibleOptions.length - 1);
-                            setActiveOption(activeIndex);
-                        } else if (e.key === 'ArrowUp') {
-                            e.preventDefault();
-                            dropdown.classList.remove('hidden');
-                            activeIndex = Math.max(activeIndex - 1, 0);
-                            setActiveOption(activeIndex);
-                        } else if (e.key === 'Enter' && activeIndex >= 0) {
-                            e.preventDefault();
-                            if (visibleOptions[activeIndex]) {
-                                const value = visibleOptions[activeIndex].dataset.value;
-                                const text = visibleOptions[activeIndex].dataset.text;
-
-                                searchInput.value = text;
-                                hiddenInput.value = value;
-                                dropdown.classList.add('hidden');
-                                activeIndex = -1;
-                            }
-                        } else if (e.key === 'Escape') {
-                            dropdown.classList.add('hidden');
-                            activeIndex = -1;
-                        }
-                    });
-
-                    // Live search functionality
-                    searchInput.addEventListener('input', () => {
-                        const searchValue = searchInput.value.toLowerCase().trim();
-                        let hasVisibleOptions = false;
-
-                        dropdown.classList.remove('hidden'); // Keep dropdown visible during search
-                        activeIndex = -1; // Reset active index when searching
-
-                        vendorOptions.forEach(option => {
-                            const text = option.innerText.toLowerCase();
-                            if (text.includes(searchValue)) {
-                                option.classList.remove('hidden');
-                                hasVisibleOptions = true;
-                            } else {
-                                option.classList.add('hidden');
-                            }
-                        });
-
-                        // Show no results message if needed
-                        let noResultsEl = dropdown.querySelector('.no-results');
-                        if (!hasVisibleOptions) {
-                            if (!noResultsEl) {
-                                noResultsEl = document.createElement('div');
-                                noResultsEl.className = 'no-results cursor-default select-none relative py-2 px-4 text-gray-500 dark:text-gray-400';
-                                noResultsEl.textContent = 'Tidak ada hasil yang cocok';
-                                dropdown.appendChild(noResultsEl);
-                            }
-                            noResultsEl.classList.remove('hidden');
-                        } else if (noResultsEl) {
-                            noResultsEl.classList.add('hidden');
-                        }
-                    });
-
-                    // Select vendor when clicking on option
-                    vendorOptions.forEach(option => {
-                        option.addEventListener('click', () => {
-                            const value = option.dataset.value;
-                            const text = option.dataset.text;
-
-                            searchInput.value = text;
-                            hiddenInput.value = value;
-                            dropdown.classList.add('hidden');
-                            activeIndex = -1;
-                        });
-                    });
-                },
-
-                toggleVendorSelect() {
-                    const isPiutang = document.getElementById('is_piutang').checked;
-                    document.getElementById('vendor_select_container').classList.toggle('hidden', !isPiutang);
-                },
-
-                toggleBuyerInfo() {
-                    const addBuyerInfo = document.getElementById('add_buyer_info').checked;
-                    document.getElementById('buyer_info_container').classList.toggle('hidden', !addBuyerInfo);
-                },
-
-                toggleCustomTime() {
-                    const customTime = document.getElementById('custom_time').checked;
-                    document.getElementById('custom_time_container').classList.toggle('hidden', !customTime);
-                },
-
-                toggleDownloadReceipt() {
-                    // Function ini hanya untuk menjaga konsistensi, tidak ada yang perlu dilakukan
-                },
-
-                setupThermalPrintButton() {
-                    const printBtn = document.getElementById('print_thermal_btn');
-                    if (!printBtn) return;
-
-                    printBtn.addEventListener('click', (e) => {
-                        // Mencegah form melakukan submit/refresh
-                        e.preventDefault();
-
-                        // Dapatkan data transaksi untuk dikirim ke halaman printer
-                        const typeId = document.getElementById('payment_method').value;
-                        const isPiutang = document.getElementById('is_piutang').checked;
-                        const vendorId = isPiutang ? document.getElementById('selected_vendor_id').value : null;
-                        const notes = document.getElementById('notes').value;
-
-                        // Data pembeli jika ada
-                        const addBuyerInfo = document.getElementById('add_buyer_info').checked;
-                        const buyerName = addBuyerInfo ? document.getElementById('buyer_name').value : null;
-                        const cashierName = addBuyerInfo ? document.getElementById('cashier_name').value : null;
-
-                        // Waktu transaksi
-                        const customTime = document.getElementById('custom_time').checked;
-                        const transactionTime = customTime ? document.getElementById('transaction_time').value : null;
-
-                        // Validasi jika pilihan vendor kosong untuk piutang
-                        if (isPiutang && !vendorId) {
-                            alert('Mohon pilih vendor terlebih dahulu untuk transaksi piutang');
-                            return;
-                        }
-
-                        // Validasi jika keranjang kosong
-                        if (!@json(count($this->cartItems))) {
-                            alert('Keranjang belanja kosong. Silakan tambahkan produk terlebih dahulu.');
-                            return;
-                        }
-
-                        // Kirim data cart melalui POST request ke server untuk disimpan di session
-                        @this.call('saveCartForPrinting', typeId, isPiutang, vendorId, notes, buyerName, cashierName, transactionTime).then(response => {
-                            // Setelah data disimpan di session, buka halaman thermal printer di tab baru
-                            const params = new URLSearchParams();
-                            params.append('session_data', 'true');
-                            params.append('type_id', typeId);
-                            params.append('is_piutang', isPiutang);
-                            if (vendorId) params.append('vendor_id', vendorId);
-                            if (notes) params.append('notes', notes);
-                            if (buyerName) params.append('buyer_name', buyerName);
-                            if (cashierName) params.append('cashier_name', cashierName);
-                            if (transactionTime) params.append('transaction_time', transactionTime);
-                            if (addBuyerInfo) params.append('add_buyer_info', addBuyerInfo);
-                            if (customTime) params.append('custom_time', customTime);
-
-                            // Buka halaman thermal printer di tab baru dan simpan referensi ke jendela baru
-                            const newTab = window.open(`{{ route('thermal-print') }}?${params.toString()}`, '_blank');
-
-                            // Jika newTab berhasil dibuka, fokus ke tab baru
-                            if (newTab) {
-                                newTab.focus();
-                            }
-                        });
-                    });
-                },
-
-                submitCheckout() {
-                    const typeId = document.getElementById('payment_method').value;
-                    const notes = document.getElementById('notes').value;
-                    const isPiutang = document.getElementById('is_piutang').checked;
-
-                    // Mengambil nilai vendor_id dari input tersembunyi
-                    let vendorId = null;
-                    if (isPiutang) {
-                        vendorId = document.getElementById('selected_vendor_id').value;
-                    }
-
-                    const downloadReceipt = document.getElementById('download_receipt').checked;
-                    const addBuyerInfo = document.getElementById('add_buyer_info').checked;
-                    const buyerName = addBuyerInfo ? document.getElementById('buyer_name').value : null;
-                    const cashierName = addBuyerInfo ? document.getElementById('cashier_name').value : null;
-                    const customTime = document.getElementById('custom_time').checked;
-                    const transactionTime = customTime ? document.getElementById('transaction_time').value : null;
-
-                    // Validasi jika pilihan vendor kosong
-                    if (isPiutang && !vendorId) {
-                        alert('Silakan pilih vendor terlebih dahulu');
-                        return;
-                    }
-
-                    // Panggil method Livewire untuk proses checkout
-                    @this.checkout({
-                        type_id: typeId,
-                        notes: notes,
-                        is_receivable: isPiutang,
-                        vendor_id: vendorId,
-                        download_receipt: downloadReceipt,
-                        buyer_name: buyerName,
-                        cashier_name: cashierName,
-                        transaction_time: transactionTime
-                    });
-                }
-            }));
-        });
-
-        // Menangani event 'close-checkout-modal'
-        document.addEventListener('DOMContentLoaded', function() {
-            window.addEventListener('close-checkout-modal', function() {
-                Livewire.dispatch('close-modal', { id: 'checkout-modal' });
-            });
-        });
-
-        // Fungsi untuk refresh halaman baru kemudian buka modal checkout
-        function refreshBeforeCheckout() {
-            // Jika halaman belum di-refresh, refresh dulu lalu tandai untuk buka modal
-            if (!sessionStorage.getItem('freshCheckout')) {
-                console.log('Refreshing for checkout...');
-                sessionStorage.setItem('freshCheckout', 'true');
-                window.location.reload();
-                return;
-            }
-
-            // Jika sudah di-refresh, buka modal dan hapus flag
-            console.log('Opening checkout modal after fresh page load');
-            sessionStorage.removeItem('freshCheckout');
-            Livewire.dispatch('open-modal', { id: 'checkout-modal' });
-        }
-
-        // Cek apakah perlu buka modal saat halaman load
-        document.addEventListener('DOMContentLoaded', function() {
-            if (sessionStorage.getItem('freshCheckout') === 'true') {
-                // Tunggu sebentar agar halaman selesai load dengan sempurna
-                setTimeout(function() {
-                    console.log('Auto-opening checkout modal');
-                    refreshBeforeCheckout();
-                }, 500);
-            }
-        });
-    </script>
 </x-filament::page>

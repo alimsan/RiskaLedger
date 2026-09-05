@@ -58,7 +58,11 @@ class KasirPage extends Page
             ->where('is_active', true);
 
         if ($this->searchQuery) {
-            $query->where('name', 'like', '%' . $this->searchQuery . '%');
+            $query->where(function ($q) {
+                $q->where('name', 'like', '%' . $this->searchQuery . '%')
+                    ->orWhere('barcode', 'like', '%' . $this->searchQuery . '%')
+                    ->orWhere('sku', 'like', '%' . $this->searchQuery . '%');
+            });
         }
 
         if ($this->selectedCategory) {
@@ -105,7 +109,7 @@ class KasirPage extends Page
         $item = Item::find($itemId);
 
         if (!$item) {
-            return;
+            return false;
         }
 
         // Jika stock_use diaktifkan, cek stock availability
@@ -119,7 +123,7 @@ class KasirPage extends Page
                     ->body('Item ' . $item->name . ' hanya tersedia ' . $item->stock . ' unit.')
                     ->warning()
                     ->send();
-                return;
+                return false;
             }
         }
 
@@ -143,6 +147,65 @@ class KasirPage extends Page
             ->title($item->name . ' ditambahkan ke keranjang')
             ->success()
             ->send();
+
+        return true;
+    }
+
+    /**
+     * Memproses input barcode dari mesin scanner barcode
+     */
+    public function scanBarcode($barcode)
+    {
+        $barcode = trim((string) $barcode);
+        if (empty($barcode)) {
+            return;
+        }
+
+        $this->searchQuery = $barcode;
+        $tenantId = auth()->user()->tenant_id;
+
+        // Cari item berdasarkan barcode, SKU, ID, atau nama yang cocok
+        $item = Item::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->where(function ($query) use ($barcode) {
+                $query->where('barcode', $barcode)
+                    ->orWhere('sku', $barcode)
+                    ->orWhere('id', $barcode)
+                    ->orWhere('name', $barcode);
+            })
+            ->first();
+
+        if (!$item) {
+            Notification::make()
+                ->title('Produk Tidak Ditemukan!')
+                ->body("Barcode / SKU '{$barcode}' tidak ditemukan pada katalog produk.")
+                ->danger()
+                ->send();
+
+            $this->dispatch('scanner-result', [
+                'success' => false,
+                'barcode' => $barcode,
+                'message' => "Barcode '{$barcode}' tidak ditemukan."
+            ]);
+            return;
+        }
+
+        $added = $this->addToCart($item->id);
+        if ($added) {
+            $this->dispatch('scanner-result', [
+                'success' => true,
+                'item' => $item->name,
+                'barcode' => $barcode,
+                'message' => "{$item->name} berhasil ditambahkan!"
+            ]);
+        } else {
+            $this->dispatch('scanner-result', [
+                'success' => false,
+                'item' => $item->name,
+                'barcode' => $barcode,
+                'message' => "Stok {$item->name} tidak mencukupi."
+            ]);
+        }
     }
 
     public function updateCartQuantity($itemId, $quantity)
