@@ -171,6 +171,14 @@ class KasirPage extends Page
             return;
         }
 
+        // Backend debounce: cegah eksekusi ganda jika barcode yang sama dikirim dalam rentang waktu < 0.8 detik
+        $now = microtime(true);
+        $lastScan = session('last_scanned_barcode_info', ['barcode' => '', 'time' => 0]);
+        if ($lastScan['barcode'] === $barcode && ($now - $lastScan['time']) < 0.8) {
+            return;
+        }
+        session(['last_scanned_barcode_info' => ['barcode' => $barcode, 'time' => $now]]);
+
         $this->searchQuery = $barcode;
         unset($this->items);
         $tenantId = auth()->user()->tenant_id;

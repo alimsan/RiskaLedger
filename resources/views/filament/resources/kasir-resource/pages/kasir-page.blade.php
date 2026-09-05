@@ -6,6 +6,9 @@
             isScannerActive: false,
             scannerStatus: 'Mesin Scanner Terhubung & Siap Scan',
             audioCtx: null,
+            lastScannedCode: '',
+            lastScanTime: 0,
+            scanCooldownMs: 800,
 
             init() {
                 // Global hotkey F2 untuk toggle mode scanner barcode
@@ -49,12 +52,14 @@
                     if (e.key === 'Enter') {
                         if (keyBuffer.length >= 2 && timeDiff < 90) {
                             e.preventDefault();
+                            e.stopImmediatePropagation();
+                            const codeToScan = keyBuffer;
+                            keyBuffer = '';
                             if (searchInput) {
-                                searchInput.value = keyBuffer;
+                                searchInput.value = codeToScan;
                                 searchInput.dispatchEvent(new Event('input', { bubbles: true }));
                             }
-                            this.handleBarcodeScan(keyBuffer);
-                            keyBuffer = '';
+                            this.handleBarcodeScan(codeToScan);
                         } else {
                             keyBuffer = '';
                         }
@@ -102,6 +107,7 @@
             handleSearchKeydown(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    e.stopPropagation();
                     const val = (e.target.value || '').trim();
                     if (val) {
                         if (this.isScannerActive) {
@@ -119,6 +125,14 @@
             handleBarcodeScan(code) {
                 const cleanCode = (code || '').trim();
                 if (!cleanCode) return;
+
+                const now = Date.now();
+                // Cegah double scan / duplikasi jika barcode sama discan dalam waktu kurang dari 800ms
+                if (cleanCode === this.lastScannedCode && (now - this.lastScanTime) < this.scanCooldownMs) {
+                    return;
+                }
+                this.lastScannedCode = cleanCode;
+                this.lastScanTime = now;
 
                 // Pastikan nilai input Cari Produk terisi dengan barcode yang di-scan
                 const searchInput = document.getElementById('search-product-input');

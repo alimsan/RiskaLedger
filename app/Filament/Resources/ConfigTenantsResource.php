@@ -27,13 +27,31 @@ class ConfigTenantsResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\TextInput::make('name')
-                    ->required()
-                    ->maxLength(255),
                 Forms\Components\Select::make('tenant_id')
+                    ->label('Tenant')
                     ->relationship('tenant', 'name')
-                    ->required(),
+                    ->required()
+                    ->searchable()
+                    ->preload(),
+                Forms\Components\TextInput::make('name')
+                    ->label('Nama Konfigurasi')
+                    ->placeholder('Contoh: stock_use, operator_produk')
+                    ->datalist([
+                        'stock_use',
+                        'operator_produk',
+                    ])
+                    ->required()
+                    ->maxLength(255)
+                    ->unique(
+                        table: 'config_tenants',
+                        column: 'name',
+                        ignorable: fn ($record) => $record,
+                        modifyRuleUsing: function ($rule, callable $get) {
+                            return $rule->where('tenant_id', $get('tenant_id'));
+                        }
+                    ),
                 Forms\Components\Toggle::make('status')
+                    ->label('Status Aktif')
                     ->default(true),
             ]);
     }
@@ -43,11 +61,15 @@ class ConfigTenantsResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->searchable(),
+                    ->label('Nama Konfigurasi')
+                    ->searchable()
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('tenant.name')
-                    ->searchable(),
-                Tables\Columns\BooleanColumn::make('status')
-                    ->searchable(),
+                    ->label('Tenant')
+                    ->searchable()
+                    ->sortable(),
+                Tables\Columns\ToggleColumn::make('status')
+                    ->label('Status'),
             ])
             ->filters([
                 //
