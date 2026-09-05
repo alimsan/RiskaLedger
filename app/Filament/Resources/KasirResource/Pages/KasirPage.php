@@ -50,6 +50,16 @@ class KasirPage extends Page
             ->toArray();
     }
 
+    public function updatedSearchQuery()
+    {
+        unset($this->items);
+    }
+
+    public function updatedSelectedCategory()
+    {
+        unset($this->items);
+    }
+
     #[Computed]
     public function items()
     {
@@ -57,11 +67,11 @@ class KasirPage extends Page
         $query = Item::where('tenant_id', $tenantId)
             ->where('is_active', true);
 
-        if ($this->searchQuery) {
-            $query->where(function ($q) {
-                $q->where('name', 'like', '%' . $this->searchQuery . '%')
-                    ->orWhere('barcode', 'like', '%' . $this->searchQuery . '%')
-                    ->orWhere('sku', 'like', '%' . $this->searchQuery . '%');
+        $search = trim((string) $this->searchQuery);
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', '%' . $search . '%')
+                    ->orWhere('barcode', 'like', '%' . $search . '%');
             });
         }
 
@@ -162,15 +172,14 @@ class KasirPage extends Page
         }
 
         $this->searchQuery = $barcode;
+        unset($this->items);
         $tenantId = auth()->user()->tenant_id;
 
-        // Cari item berdasarkan barcode, SKU, ID, atau nama yang cocok
+        // Cari item berdasarkan barcode atau nama yang cocok
         $item = Item::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->where(function ($query) use ($barcode) {
                 $query->where('barcode', $barcode)
-                    ->orWhere('sku', $barcode)
-                    ->orWhere('id', $barcode)
                     ->orWhere('name', $barcode);
             })
             ->first();
@@ -178,7 +187,7 @@ class KasirPage extends Page
         if (!$item) {
             Notification::make()
                 ->title('Produk Tidak Ditemukan!')
-                ->body("Barcode / SKU '{$barcode}' tidak ditemukan pada katalog produk.")
+                ->body("Barcode '{$barcode}' tidak ditemukan pada katalog produk.")
                 ->danger()
                 ->send();
 

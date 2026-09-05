@@ -1,3 +1,4 @@
+<x-filament::page>
 <script>
     window.checkoutFunctions = function() {
         return {
@@ -103,7 +104,14 @@
                     e.preventDefault();
                     const val = (e.target.value || '').trim();
                     if (val) {
-                        this.handleBarcodeScan(val);
+                        if (this.isScannerActive) {
+                            this.handleBarcodeScan(val);
+                        } else {
+                            const caller = (this.$wire || @this);
+                            if (caller) {
+                                caller.set('searchQuery', val);
+                            }
+                        }
                     }
                 }
             },
@@ -477,7 +485,7 @@
     }
 </script>
 
-<x-filament::page x-data="checkoutFunctions()">
+<div x-data="checkoutFunctions()">
     <style>
         /* Style sederhana untuk toggle switch */
         .simple-toggle {
@@ -544,7 +552,7 @@
                             x-ref="searchInput"
                             wire:model.live.debounce.300ms="searchQuery"
                             @keydown="handleSearchKeydown($event)"
-                            placeholder="Cari produk (nama, SKU, atau barcode)..."
+                            placeholder="Cari produk (nama atau barcode)..."
                             :class="isScannerActive ? 'ring-2 ring-emerald-500 border-emerald-500 dark:border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20' : 'border-gray-300 dark:border-gray-700'"
                             class="w-full pl-9 rounded-lg dark:bg-gray-800 dark:text-white shadow-sm text-sm transition-all"
                             autocomplete="off"
@@ -956,4 +964,5 @@
             </div>
         </x-slot>
     </x-filament::modal>
+</div>
 </x-filament::page>

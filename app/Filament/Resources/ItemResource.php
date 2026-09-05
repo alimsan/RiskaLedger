@@ -75,20 +75,16 @@ class ItemResource extends Resource
                 ->numeric()
                 ->default(0),
             Forms\Components\FileUpload::make('image')
-                ->label('Gambar')
-                ->directory('items')
+                ->label('Gambar Produk')
                 ->image()
-                ->imagePreviewHeight('100')
-                ->panelAspectRatio('2:1')
-                ->panelLayout('integrated')
-                ->imageResizeMode('cover')
+                ->directory('items')
+                ->disk('public')
+                ->visibility('public')
                 ->maxSize(5120), // 5MB max
             Forms\Components\TextInput::make('sku')
                 ->label('SKU')
                 ->maxLength(255),
-            Forms\Components\TextInput::make('barcode')
-                ->label('Barcode')
-                ->maxLength(255),
+            static::getBarcodeField(),
             Forms\Components\TextInput::make('category')
                 ->label('Kategori')
                 ->maxLength(255),
@@ -113,6 +109,68 @@ class ItemResource extends Resource
                 Forms\Components\Section::make('Informasi Produk')
                     ->schema($schema)
                     ->columns(2),
+            ]);
+    }
+
+    /**
+     * Komponen input barcode dengan tombol scanner dan enter protection (terisolasi per-baris)
+     */
+    public static function getBarcodeField(bool $inRepeater = false): Forms\Components\TextInput
+    {
+        return Forms\Components\TextInput::make('barcode')
+            ->label('Barcode')
+            ->placeholder('Scan / ketik barcode...')
+            ->maxLength(255)
+            ->suffixAction(
+                Forms\Components\Actions\Action::make('scanBarcode')
+                    ->icon('heroicon-m-qr-code')
+                    ->tooltip('Klik untuk scan barcode dengan mesin')
+                    ->color('success')
+                    ->extraAttributes([
+                        'type' => 'button',
+                        'title' => 'Klik untuk fokus dan scan barcode',
+                    ])
+                    ->alpineClickHandler('
+                        const wrapper = $el.closest(".fi-fo-field-wrp") || $el.closest("[wire\\\\:key]");
+                        const input = wrapper ? wrapper.querySelector("input") : null;
+                        if (input) {
+                            input.focus();
+                            input.select();
+                            try {
+                                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                                const osc = ctx.createOscillator();
+                                const gain = ctx.createGain();
+                                osc.connect(gain);
+                                gain.connect(ctx.destination);
+                                osc.frequency.value = 1000;
+                                gain.gain.value = 0.1;
+                                osc.start();
+                                osc.stop(ctx.currentTime + 0.08);
+                            } catch(e){}
+                        }
+                    ')
+            )
+            ->extraInputAttributes([
+                '@keydown.enter.prevent' => '
+                    try {
+                        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.frequency.value = 1200;
+                        gain.gain.value = 0.15;
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.1);
+                    } catch(e){}
+                    const row = $el.closest(".fi-fo-repeater-item") || $el.closest("form");
+                    if (row) {
+                        const nameInput = row.querySelector("input[name*=\'name\']");
+                        if (nameInput) {
+                            nameInput.focus();
+                        }
+                    }
+                ',
             ]);
     }
 
