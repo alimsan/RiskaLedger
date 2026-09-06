@@ -38,6 +38,15 @@ Route::get('/admin/receipt/download/{type}/{id}', [\App\Http\Controllers\Receipt
     ->middleware(['auth'])
     ->name('admin.receipt.download');
 
+// Route untuk Barcode Preview dan Export PDF Label
+Route::get('/admin/barcode/preview', [\App\Http\Controllers\BarcodeController::class, 'preview'])
+    ->middleware(['auth'])
+    ->name('admin.barcode.preview');
+
+Route::get('/admin/barcode/export-pdf', [\App\Http\Controllers\BarcodeController::class, 'exportPdf'])
+    ->middleware(['auth'])
+    ->name('admin.barcode.export');
+
 Route::get('/debug-auth', function() {
     return [
         'auth' => auth()->check(),

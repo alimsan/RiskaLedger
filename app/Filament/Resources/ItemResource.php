@@ -113,7 +113,7 @@ class ItemResource extends Resource
     }
 
     /**
-     * Komponen input barcode dengan tombol scanner dan enter protection (terisolasi per-baris)
+     * Komponen input barcode dengan tombol generate barcode, tombol scanner, live preview, dan enter protection
      */
     public static function getBarcodeField(bool $inRepeater = false): Forms\Components\TextInput
     {
@@ -121,7 +121,36 @@ class ItemResource extends Resource
             ->label('Barcode')
             ->placeholder('Scan / ketik barcode...')
             ->maxLength(255)
-            ->suffixAction(
+            ->suffixActions([
+                Forms\Components\Actions\Action::make('generateBarcode')
+                    ->icon('heroicon-m-sparkles')
+                    ->tooltip('Generate Barcode Otomatis')
+                    ->color('warning')
+                    ->extraAttributes([
+                        'type' => 'button',
+                        'title' => 'Klik untuk generate barcode acak unik',
+                    ])
+                    ->alpineClickHandler('
+                        const wrapper = $el.closest(".fi-fo-field-wrp") || $el.closest("[wire\\\\:key]");
+                        const input = wrapper ? wrapper.querySelector("input") : null;
+                        if (input) {
+                            const randCode = "899" + Math.floor(100000000 + Math.random() * 900000000);
+                            input.value = randCode;
+                            input.dispatchEvent(new Event("input", { bubbles: true }));
+                            input.dispatchEvent(new Event("change", { bubbles: true }));
+                            try {
+                                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                                const osc = ctx.createOscillator();
+                                const gain = ctx.createGain();
+                                osc.connect(gain);
+                                gain.connect(ctx.destination);
+                                osc.frequency.value = 880;
+                                gain.gain.value = 0.12;
+                                osc.start();
+                                osc.stop(ctx.currentTime + 0.1);
+                            } catch(e){}
+                        }
+                    '),
                 Forms\Components\Actions\Action::make('scanBarcode')
                     ->icon('heroicon-m-qr-code')
                     ->tooltip('Klik untuk scan barcode dengan mesin')
@@ -148,8 +177,9 @@ class ItemResource extends Resource
                                 osc.stop(ctx.currentTime + 0.08);
                             } catch(e){}
                         }
-                    ')
-            )
+                    '),
+            ])
+            ->helperText(view('filament.forms.components.barcode-input-preview'))
             ->extraInputAttributes([
                 '@keydown.enter.prevent' => '
                     try {
@@ -185,6 +215,16 @@ class ItemResource extends Resource
             Tables\Columns\TextColumn::make('name')
                 ->label('Nama Produk')
                 ->searchable(),
+            Tables\Columns\TextColumn::make('barcode')
+                ->label('Barcode')
+                ->searchable()
+                ->html()
+                ->formatStateUsing(function (?string $state) {
+                    if (empty($state)) {
+                        return '<span class="text-xs text-gray-400 italic">Belum ada</span>';
+                    }
+                    return \App\Services\BarcodeService::renderHtml($state, 1, 30);
+                }),
             Tables\Columns\TextColumn::make('category')
                 ->label('Kategori')
                 ->searchable(),
@@ -264,11 +304,58 @@ class ItemResource extends Resource
                     }),
             ])
             ->actions([
+                Tables\Actions\Action::make('printBarcode')
+                    ->label('Cetak Barcode')
+                    ->icon('heroicon-o-printer')
+                    ->color('gray')
+                    ->visible(fn (Item $record): bool => !empty($record->barcode))
+                    ->form([
+                        Forms\Components\TextInput::make('copies')
+                            ->label('Jumlah Label yang Dicetak')
+                            ->numeric()
+                            ->default(1)
+                            ->minValue(1)
+                            ->maxValue(100)
+                            ->required(),
+                        Forms\Components\Toggle::make('include_price')
+                            ->label('Cantumkan Harga Produk')
+                            ->default(true),
+                    ])
+                    ->action(function (Item $record, array $data) {
+                        return \App\Services\BarcodeService::downloadPdf(
+                            collect([$record]),
+                            (int) ($data['copies'] ?? 1),
+                            (bool) ($data['include_price'] ?? true)
+                        );
+                    }),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\BulkAction::make('printSelectedBarcodes')
+                        ->label('Cetak Barcode Terpilih (PDF)')
+                        ->icon('heroicon-o-printer')
+                        ->color('success')
+                        ->form([
+                            Forms\Components\TextInput::make('copies')
+                                ->label('Jumlah Label Tiap Produk')
+                                ->numeric()
+                                ->default(1)
+                                ->minValue(1)
+                                ->maxValue(50)
+                                ->required(),
+                            Forms\Components\Toggle::make('include_price')
+                                ->label('Cantumkan Harga Produk')
+                                ->default(true),
+                        ])
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data) {
+                            return \App\Services\BarcodeService::downloadPdf(
+                                $records,
+                                (int) ($data['copies'] ?? 1),
+                                (bool) ($data['include_price'] ?? true)
+                            );
+                        }),
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
