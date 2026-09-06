@@ -47,6 +47,10 @@ Route::get('/admin/barcode/export-pdf', [\App\Http\Controllers\BarcodeController
     ->middleware(['auth'])
     ->name('admin.barcode.export');
 
+Route::get('/admin/barcode/thermal-label', [\App\Http\Controllers\BarcodeController::class, 'thermalLabel'])
+    ->middleware(['auth'])
+    ->name('admin.barcode.thermal-label');
+
 Route::get('/debug-auth', function() {
     return [
         'auth' => auth()->check(),

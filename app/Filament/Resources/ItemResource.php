@@ -305,11 +305,20 @@ class ItemResource extends Resource
             ])
             ->actions([
                 Tables\Actions\Action::make('printBarcode')
-                    ->label('Cetak Barcode')
+                    ->label('Cetak Label / Barcode')
                     ->icon('heroicon-o-printer')
-                    ->color('gray')
+                    ->color('primary')
                     ->visible(fn (Item $record): bool => !empty($record->barcode))
                     ->form([
+                        Forms\Components\Radio::make('print_method')
+                            ->label('Metode Pencetakan')
+                            ->options([
+                                'thermal' => 'Printer Label Thermal (NIIMBOT B1 Bluetooth)',
+                                'pdf' => 'Export PDF Lembaran A4 (Siap Potong)',
+                            ])
+                            ->default('thermal')
+                            ->live()
+                            ->required(),
                         Forms\Components\TextInput::make('copies')
                             ->label('Jumlah Label yang Dicetak')
                             ->numeric()
@@ -320,13 +329,51 @@ class ItemResource extends Resource
                         Forms\Components\Toggle::make('include_price')
                             ->label('Cantumkan Harga Produk')
                             ->default(true),
+                        Forms\Components\Select::make('label_size')
+                            ->label('Ukuran Kertas Label')
+                            ->options([
+                                '50x30' => '50 x 30 mm (Standar NIIMBOT B1)',
+                                '40x30' => '40 x 30 mm',
+                                '30x20' => '30 x 20 mm',
+                            ])
+                            ->default('50x30')
+                            ->visible(fn (Forms\Get $get) => $get('print_method') === 'thermal'),
+                        Forms\Components\Select::make('density')
+                            ->label('Kepekatan Cetak (Density)')
+                            ->options([
+                                1 => '1 - Tipis',
+                                2 => '2 - Sedang',
+                                3 => '3 - Normal (Standar B1)',
+                                4 => '4 - Pekat',
+                                5 => '5 - Sangat Pekat',
+                            ])
+                            ->default(3)
+                            ->visible(fn (Forms\Get $get) => $get('print_method') === 'thermal'),
                     ])
-                    ->action(function (Item $record, array $data) {
-                        return \App\Services\BarcodeService::downloadPdf(
-                            collect([$record]),
-                            (int) ($data['copies'] ?? 1),
-                            (bool) ($data['include_price'] ?? true)
-                        );
+                    ->action(function (Item $record, array $data, \Livewire\Component $livewire) {
+                        $method = $data['print_method'] ?? 'thermal';
+                        $copies = (int) ($data['copies'] ?? 1);
+                        $includePrice = (bool) ($data['include_price'] ?? true);
+
+                        if ($method === 'pdf') {
+                            return \App\Services\BarcodeService::downloadPdf(
+                                collect([$record]),
+                                $copies,
+                                $includePrice
+                            );
+                        }
+
+                        // Mode Thermal NIIMBOT B1
+                        session(['thermal_label_payload' => [
+                            'ids' => [$record->id],
+                            'copies' => $copies,
+                            'include_price' => $includePrice,
+                            'label_size' => $data['label_size'] ?? '50x30',
+                            'density' => (int) ($data['density'] ?? 2),
+                        ]]);
+
+                        $url = route('admin.barcode.thermal-label', ['session' => 1]);
+                        $livewire->js("window.open('{$url}', '_blank');");
                     }),
                 Tables\Actions\EditAction::make()
                     ->hidden(fn () => \App\Models\ConfigTenants::isStrictOperator()),
@@ -335,9 +382,77 @@ class ItemResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\BulkAction::make('printSelectedThermal')
+                        ->label('Print Label/Barkode (Thermal)')
+                        ->icon('heroicon-o-printer')
+                        ->color('warning')
+                        ->form([
+                            Forms\Components\Select::make('copies_type')
+                                ->label('Penentuan Jumlah Label')
+                                ->options([
+                                    'fixed' => 'Jumlah Tetap (Tiap Produk)',
+                                    'by_stock' => 'Sesuai Jumlah Stok Produk Saat Ini',
+                                ])
+                                ->default('fixed')
+                                ->live(),
+                            Forms\Components\TextInput::make('copies')
+                                ->label('Jumlah Label Tiap Produk')
+                                ->numeric()
+                                ->default(1)
+                                ->minValue(1)
+                                ->maxValue(100)
+                                ->visible(fn (Forms\Get $get) => $get('copies_type') === 'fixed')
+                                ->required(),
+                            Forms\Components\Toggle::make('include_price')
+                                ->label('Cantumkan Harga Produk')
+                                ->default(true),
+                            Forms\Components\Select::make('label_size')
+                                ->label('Ukuran Kertas Label')
+                                ->options([
+                                    '50x30' => '50 x 30 mm (Standar NIIMBOT B1)',
+                                    '40x30' => '40 x 30 mm',
+                                    '30x20' => '30 x 20 mm',
+                                ])
+                                ->default('50x30'),
+                            Forms\Components\Select::make('density')
+                                ->label('Kepekatan Cetak (Density)')
+                                ->options([
+                                    1 => '1 - Tipis',
+                                    2 => '2 - Sedang',
+                                    3 => '3 - Normal (Standar B1)',
+                                    4 => '4 - Pekat',
+                                    5 => '5 - Sangat Pekat',
+                                ])
+                                ->default(3),
+                        ])
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data, \Livewire\Component $livewire) {
+                            $validRecords = $records->filter(fn (Item $r) => !empty($r->barcode));
+
+                            if ($validRecords->isEmpty()) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Gagal Memproses')
+                                    ->body('Produk yang dicentang tidak memiliki barcode untuk dicetak.')
+                                    ->warning()
+                                    ->send();
+                                return;
+                            }
+
+                            $copies = ($data['copies_type'] ?? 'fixed') === 'by_stock' ? 'by_stock' : (int) ($data['copies'] ?? 1);
+
+                            session(['thermal_label_payload' => [
+                                'ids' => $validRecords->pluck('id')->toArray(),
+                                'copies' => $copies,
+                                'include_price' => (bool) ($data['include_price'] ?? true),
+                                'label_size' => $data['label_size'] ?? '50x30',
+                                'density' => (int) ($data['density'] ?? 2),
+                            ]]);
+
+                            $url = route('admin.barcode.thermal-label', ['session' => 1]);
+                            $livewire->js("window.open('{$url}', '_blank');");
+                        }),
                     Tables\Actions\BulkAction::make('printSelectedBarcodes')
                         ->label('Cetak Barcode Terpilih (PDF)')
-                        ->icon('heroicon-o-printer')
+                        ->icon('heroicon-o-document-arrow-down')
                         ->color('success')
                         ->form([
                             Forms\Components\TextInput::make('copies')
