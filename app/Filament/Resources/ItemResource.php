@@ -328,8 +328,10 @@ class ItemResource extends Resource
                             (bool) ($data['include_price'] ?? true)
                         );
                     }),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->hidden(fn () => \App\Models\ConfigTenants::isStrictOperator()),
+                Tables\Actions\DeleteAction::make()
+                    ->hidden(fn () => \App\Models\ConfigTenants::isStrictOperator()),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -356,7 +358,8 @@ class ItemResource extends Resource
                                 (bool) ($data['include_price'] ?? true)
                             );
                         }),
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->hidden(fn () => \App\Models\ConfigTenants::isStrictOperator()),
                 ]),
             ]);
 
@@ -366,6 +369,33 @@ class ItemResource extends Resource
         }
 
         return $table;
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        if (\App\Models\ConfigTenants::isStrictOperator()) {
+            return false;
+        }
+
+        return parent::canEdit($record);
+    }
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        if (\App\Models\ConfigTenants::isStrictOperator()) {
+            return false;
+        }
+
+        return parent::canDelete($record);
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        if (\App\Models\ConfigTenants::isStrictOperator()) {
+            return false;
+        }
+
+        return parent::canDeleteAny();
     }
 
     public static function getRelations(): array
