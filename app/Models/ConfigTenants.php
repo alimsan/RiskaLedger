@@ -52,4 +52,22 @@ class ConfigTenants extends Model
 
         return static::isConfigActive($user->tenant_id, 'strict_operator');
     }
+
+    /**
+     * Cek apakah fitur printer label Niimbot B1 aktif untuk tenant user saat ini
+     */
+    public static function isNiimbotB1Active(?User $user = null): bool
+    {
+        $user = $user ?? auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        $tenantId = $user->tenant_id;
+        if (!$tenantId) {
+            return static::where('name', 'niimbot_b1')->where('status', true)->exists();
+        }
+
+        return static::isConfigActive($tenantId, 'niimbot_b1');
+    }
 }

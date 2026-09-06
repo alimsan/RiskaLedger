@@ -80,6 +80,11 @@ class BarcodeController extends Controller
             abort(403, 'Akses tidak diizinkan');
         }
 
+        if (!\App\Models\ConfigTenants::isNiimbotB1Active($user)) {
+            return redirect()->route('filament.admin.resources.items.index')
+                ->with('error', 'Fitur printer label NIIMBOT B1 belum diaktifkan pada pengaturan tenant ini.');
+        }
+
         // Ambil konfigurasi dari query string atau session
         $payload = session('thermal_label_payload', []);
         $fromSession = (bool) $request->query('from_session', false) || (bool) $request->query('session', false);

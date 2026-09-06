@@ -312,11 +312,19 @@ class ItemResource extends Resource
                     ->form([
                         Forms\Components\Radio::make('print_method')
                             ->label('Metode Pencetakan')
-                            ->options([
-                                'thermal' => 'Printer Label Thermal (NIIMBOT B1 Bluetooth)',
-                                'pdf' => 'Export PDF Lembaran A4 (Siap Potong)',
-                            ])
-                            ->default('thermal')
+                            ->options(function () {
+                                if (\App\Models\ConfigTenants::isNiimbotB1Active()) {
+                                    return [
+                                        'thermal' => 'Printer Label Thermal (NIIMBOT B1 Bluetooth)',
+                                        'pdf' => 'Export PDF Lembaran A4 (Siap Potong)',
+                                    ];
+                                }
+                                return [
+                                    'pdf' => 'Export PDF Lembaran A4 (Siap Potong)',
+                                ];
+                            })
+                            ->default(fn () => \App\Models\ConfigTenants::isNiimbotB1Active() ? 'thermal' : 'pdf')
+                            ->visible(fn () => \App\Models\ConfigTenants::isNiimbotB1Active())
                             ->live()
                             ->required(),
                         Forms\Components\TextInput::make('copies')
@@ -337,7 +345,7 @@ class ItemResource extends Resource
                                 '30x20' => '30 x 20 mm',
                             ])
                             ->default('50x30')
-                            ->visible(fn (Forms\Get $get) => $get('print_method') === 'thermal'),
+                            ->visible(fn (Forms\Get $get) => \App\Models\ConfigTenants::isNiimbotB1Active() && $get('print_method') === 'thermal'),
                         Forms\Components\Select::make('density')
                             ->label('Kepekatan Cetak (Density)')
                             ->options([
@@ -348,14 +356,14 @@ class ItemResource extends Resource
                                 5 => '5 - Sangat Pekat',
                             ])
                             ->default(3)
-                            ->visible(fn (Forms\Get $get) => $get('print_method') === 'thermal'),
+                            ->visible(fn (Forms\Get $get) => \App\Models\ConfigTenants::isNiimbotB1Active() && $get('print_method') === 'thermal'),
                     ])
                     ->action(function (Item $record, array $data, \Livewire\Component $livewire) {
-                        $method = $data['print_method'] ?? 'thermal';
+                        $method = $data['print_method'] ?? (\App\Models\ConfigTenants::isNiimbotB1Active() ? 'thermal' : 'pdf');
                         $copies = (int) ($data['copies'] ?? 1);
                         $includePrice = (bool) ($data['include_price'] ?? true);
 
-                        if ($method === 'pdf') {
+                        if ($method === 'pdf' || !\App\Models\ConfigTenants::isNiimbotB1Active()) {
                             return \App\Services\BarcodeService::downloadPdf(
                                 collect([$record]),
                                 $copies,
@@ -369,7 +377,7 @@ class ItemResource extends Resource
                             'copies' => $copies,
                             'include_price' => $includePrice,
                             'label_size' => $data['label_size'] ?? '50x30',
-                            'density' => (int) ($data['density'] ?? 2),
+                            'density' => (int) ($data['density'] ?? 3),
                         ]]);
 
                         $url = route('admin.barcode.thermal-label', ['session' => 1]);
@@ -386,6 +394,7 @@ class ItemResource extends Resource
                         ->label('Print Label/Barkode (Thermal)')
                         ->icon('heroicon-o-printer')
                         ->color('warning')
+                        ->visible(fn (): bool => \App\Models\ConfigTenants::isNiimbotB1Active())
                         ->form([
                             Forms\Components\Select::make('copies_type')
                                 ->label('Penentuan Jumlah Label')

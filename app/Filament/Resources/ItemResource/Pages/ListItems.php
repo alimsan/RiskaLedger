@@ -17,6 +17,7 @@ class ListItems extends ListRecords
                 ->label('Cetak Label Thermal (Niimbot)')
                 ->icon('heroicon-o-printer')
                 ->color('warning')
+                ->visible(fn (): bool => \App\Models\ConfigTenants::isNiimbotB1Active())
                 ->form([
                     \Filament\Forms\Components\Select::make('filter')
                         ->label('Produk yang Dicetak')

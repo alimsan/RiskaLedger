@@ -35,11 +35,12 @@ class ConfigTenantsResource extends Resource
                     ->preload(),
                 Forms\Components\TextInput::make('name')
                     ->label('Nama Konfigurasi')
-                    ->placeholder('Contoh: stock_use, operator_produk, strict_operator')
+                    ->placeholder('Contoh: stock_use, operator_produk, strict_operator, niimbot_b1')
                     ->datalist([
                         'stock_use',
                         'operator_produk',
                         'strict_operator',
+                        'niimbot_b1',
                     ])
                     ->required()
                     ->maxLength(255)
