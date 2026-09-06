@@ -478,23 +478,11 @@ class KasirPage extends Page
             // Commit transaksi
             DB::commit();
 
-            // Jika perlu mengunduh nota
-            if (isset($data['download_receipt']) && $data['download_receipt']) {
-                // Siapkan data untuk nota
-                $receiptData = [
-                    'items' => $this->cartItems,
-                    'total' => $total,
-                    'transaction_date' => $transactionTime->format('d-m-Y H:i:s'),
-                    'transaction_id' => $transaction->id ?? ($piutang->id ?? 'N/A'),
-                    'payment_method' => CashInOutType::find($data['type_id'])->name ?? 'N/A',
-                    'is_receivable' => isset($data['is_receivable']) && $data['is_receivable'],
-                    'vendor' => isset($data['vendor_id']) ? Vendor::find($data['vendor_id'])->nama_vendor : null,
-                    'notes' => $data['notes'] ?? ''
-                ];
+            // Commit transaksi
+            DB::commit();
 
-                // Generate PDF dan Download
-                return $this->generateReceipt($receiptData);
-            }
+            $transactionId = isset($transaction) ? $transaction->id : ($piutang->id ?? null);
+            $transactionType = isset($data['is_receivable']) && $data['is_receivable'] ? 'piutang' : 'penjualan';
 
             // Bersihkan keranjang
             $this->clearCart();
@@ -502,6 +490,15 @@ class KasirPage extends Page
             // Tutup modal
             $this->dispatch('close-checkout-modal');
             $this->dispatch('close-modal', id: 'checkout-modal');
+
+            // Jika perlu mengunduh nota, trigger event download ke frontend
+            if (!empty($data['download_receipt']) && $transactionId) {
+                $downloadUrl = route('admin.receipt.download', [
+                    'type' => $transactionType,
+                    'id' => $transactionId,
+                ]);
+                $this->dispatch('download-receipt-pdf', url: $downloadUrl);
+            }
 
         } catch (\Exception $e) {
             // Rollback transaksi

@@ -167,6 +167,11 @@ class CashInOutResource extends Resource
                 ->label('Waktu Transaksi')
                 ->dateTime('d M Y H:i')
                 ->sortable(),
+            TextColumn::make('created_at')
+                ->label('Dibuat Pada')
+                ->dateTime('d M Y H:i')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
         ];
 
         // Jika user adalah admin, tambahkan kolom tenant
@@ -181,6 +186,7 @@ class CashInOutResource extends Resource
 
         return $table
             ->modifyQueryUsing($query)
+            ->defaultSort('waktu', 'desc')
             ->columns($columns)
             ->filters([
                 \Filament\Tables\Filters\Filter::make('waktu')

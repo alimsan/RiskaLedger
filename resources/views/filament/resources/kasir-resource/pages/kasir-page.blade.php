@@ -478,6 +478,21 @@
         Livewire.dispatch('close-modal', { id: 'checkout-modal' });
     });
 
+    // Menangani event 'download-receipt-pdf' untuk download otomatis nota PDF
+    window.addEventListener('download-receipt-pdf', function(event) {
+        const data = event.detail;
+        const url = typeof data === 'string' ? data : (data?.url || (Array.isArray(data) ? data[0]?.url : null));
+        if (url) {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = '';
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    });
+
     // Fungsi untuk refresh halaman baru kemudian buka modal checkout
     function refreshBeforeCheckout() {
         if (!sessionStorage.getItem('freshCheckout')) {

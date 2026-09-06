@@ -33,6 +33,11 @@ Route::get('/admin/thermal-print/{id?}', [TestPrinterController::class, 'printTh
     ->middleware(['auth', 'verified'])
     ->name('thermal-print');
 
+// Route untuk download nota PDF kasir
+Route::get('/admin/receipt/download/{type}/{id}', [\App\Http\Controllers\ReceiptController::class, 'download'])
+    ->middleware(['auth'])
+    ->name('admin.receipt.download');
+
 Route::get('/debug-auth', function() {
     return [
         'auth' => auth()->check(),
