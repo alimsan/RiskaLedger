@@ -67,7 +67,7 @@ class TestPrinterController extends Controller
                     ->get();
                 
                 $items = [];
-                $total = 0;
+                $subtotal = 0;
                 
                 foreach ($transactionItems as $item) {
                     $product = \App\Models\Item::find($item->item_id);
@@ -79,8 +79,11 @@ class TestPrinterController extends Controller
                         'quantity' => $item->quantity
                     ];
                     
-                    $total += $item->subtotal;
+                    $subtotal += $item->subtotal;
                 }
+
+                $finalTotal = $transactionType === 'piutang' ? ($transaction->total_utang ?? 0) : ($transaction->nilai ?? 0);
+                $discount = max(0, $subtotal - $finalTotal);
                 
                 // Ambil data tenant
                 $tenant = Tenant::find(auth()->user()->tenant_id);
@@ -93,7 +96,9 @@ class TestPrinterController extends Controller
                 
                 return view('thermal-printer', [
                     'items' => $items,
-                    'total' => $total,
+                    'subtotal' => $subtotal,
+                    'discount' => $discount,
+                    'total' => $finalTotal,
                     'transaction_id' => $id,
                     'transaction_date' => $transactionDate,
                     'payment_method' => $paymentMethod,
@@ -107,7 +112,19 @@ class TestPrinterController extends Controller
         
         // Jika tidak ada ID atau transaksi tidak ditemukan, gunakan data dari session
         $items = session('print_items', []);
-        $total = session('print_total', 0);
+        $subtotal = (float) session('print_subtotal', 0);
+        $discount = (float) ($request->get('discount') ?? session('print_discount', 0));
+        $total = (float) session('print_total', 0);
+
+        if (!$subtotal) {
+            foreach ($items as $item) {
+                $subtotal += ($item['price'] * $item['quantity']);
+            }
+        }
+        if (!$total) {
+            $total = max(0, $subtotal - $discount);
+        }
+
         $transaction_id = session('print_transaction_id', 'TRX' . date('YmdHis'));
         $transaction_date = session('print_transaction_date', date('d/m/Y H:i'));
         $payment_method = session('print_payment_method', 'Tunai');
@@ -119,6 +136,8 @@ class TestPrinterController extends Controller
         
         return view('thermal-printer', [
             'items' => $items,
+            'subtotal' => $subtotal,
+            'discount' => $discount,
             'total' => $total,
             'transaction_id' => $transaction_id,
             'transaction_date' => $transaction_date,

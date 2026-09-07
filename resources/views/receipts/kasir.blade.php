@@ -158,8 +158,14 @@
                 <tfoot>
                     <tr>
                         <td colspan="4" style="text-align: right;"><strong>Sub Total</strong></td>
-                        <td>Rp {{ number_format($total, 0, ',', '.') }}</td>
+                        <td>Rp {{ number_format($subtotal ?? $total, 0, ',', '.') }}</td>
                     </tr>
+                    @if(isset($discount) && $discount > 0)
+                    <tr>
+                        <td colspan="4" style="text-align: right; color: #b45309;"><strong>Potongan Harga</strong></td>
+                        <td style="color: #b45309;">- Rp {{ number_format($discount, 0, ',', '.') }}</td>
+                    </tr>
+                    @endif
                     <tr>
                         <td colspan="4" style="text-align: right;"><strong>Pajak</strong></td>
                         <td>-</td>

@@ -58,6 +58,7 @@ class ReceiptController extends Controller
             ->where('transaction_type', $type)
             ->get();
 
+        $subtotal = 0;
         foreach ($trxItems as $tItem) {
             $product = \App\Models\Item::find($tItem->item_id);
             $items[] = [
@@ -65,7 +66,10 @@ class ReceiptController extends Controller
                 'price' => $tItem->price,
                 'quantity' => $tItem->quantity,
             ];
+            $subtotal += $tItem->price * $tItem->quantity;
         }
+
+        $discount = max(0, $subtotal - $total);
 
         $receiptData = [
             'tenant_name' => $tenant->name ?? 'Toko',
@@ -79,6 +83,8 @@ class ReceiptController extends Controller
             'vendor' => $vendorName,
             'notes' => $notes,
             'items' => $items,
+            'subtotal' => $subtotal,
+            'discount' => $discount,
             'total' => $total,
         ];
 

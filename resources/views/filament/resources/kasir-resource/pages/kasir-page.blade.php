@@ -10,6 +10,38 @@
             lastScanTime: 0,
             scanCooldownMs: 800,
 
+            // State untuk potongan harga (diskon)
+            currentSubtotal: {{ (float) $this->cartSubtotal }},
+            currentDiscount: {{ (float) $this->discount }},
+
+            handleModalDiscountChange(e) {
+                const raw = (e.target.value || '').replace(/[^0-9]/g, '');
+                let val = parseInt(raw, 10) || 0;
+                if (val > this.currentSubtotal) {
+                    val = this.currentSubtotal;
+                }
+                this.currentDiscount = val;
+                e.target.value = val > 0 ? val.toLocaleString('id-ID') : '';
+                this.updateModalDisplay();
+
+                const caller = (this.$wire || @this);
+                if (caller && typeof caller.setDiscountAmount === 'function') {
+                    caller.setDiscountAmount(val);
+                }
+            },
+
+            updateModalDisplay() {
+                const total = Math.max(0, this.currentSubtotal - this.currentDiscount);
+                const totalEl = document.getElementById('modal_total_display');
+                if (totalEl) {
+                    totalEl.innerText = 'Rp ' + total.toLocaleString('id-ID');
+                }
+                const discDisplay = document.getElementById('modal_discount_display');
+                if (discDisplay) {
+                    discDisplay.innerText = '- Rp ' + this.currentDiscount.toLocaleString('id-ID');
+                }
+            },
+
             init() {
                 // Global hotkey F2 untuk toggle mode scanner barcode
                 window.addEventListener('keydown', (e) => {
@@ -206,6 +238,15 @@
                 document.getElementById('download_receipt').checked = false;
                 document.getElementById('add_buyer_info').checked = false;
                 document.getElementById('custom_time').checked = false;
+
+                // Sync data diskon di modal
+                this.currentSubtotal = {{ (float) $this->cartSubtotal }};
+                this.currentDiscount = {{ (float) $this->discount }};
+                const modalDiscInput = document.getElementById('modal_discount_input');
+                if (modalDiscInput) {
+                    modalDiscInput.value = this.currentDiscount > 0 ? this.currentDiscount.toLocaleString('id-ID') : '';
+                }
+                this.updateModalDisplay();
 
                 // Setup thermal print button
                 this.setupThermalPrintButton();
@@ -407,7 +448,8 @@
                     }
 
                     const caller = (this.$wire || @this);
-                    caller.saveCartForPrinting(typeId, isPiutang, vendorId, notes, buyerName, cashierName, transactionTime).then(response => {
+                    const discountVal = this.currentDiscount || 0;
+                    caller.saveCartForPrinting(typeId, isPiutang, vendorId, notes, buyerName, cashierName, transactionTime, discountVal).then(response => {
                         const params = new URLSearchParams();
                         params.append('session_data', 'true');
                         params.append('type_id', typeId);
@@ -419,6 +461,7 @@
                         if (transactionTime) params.append('transaction_time', transactionTime);
                         if (addBuyerInfo) params.append('add_buyer_info', addBuyerInfo);
                         if (customTime) params.append('custom_time', customTime);
+                        if (discountVal > 0) params.append('discount', discountVal);
 
                         const newTab = window.open(`{{ route('thermal-print') }}?${params.toString()}`, '_blank');
                         if (newTab) {
@@ -451,6 +494,7 @@
                 }
 
                 const caller = (this.$wire || @this);
+                const discountVal = this.currentDiscount || 0;
                 caller.checkout({
                     type_id: typeId,
                     notes: notes,
@@ -459,7 +503,8 @@
                     download_receipt: downloadReceipt,
                     buyer_name: buyerName,
                     cashier_name: cashierName,
-                    transaction_time: transactionTime
+                    transaction_time: transactionTime,
+                    discount: discountVal
                 });
             }
         };
@@ -560,6 +605,220 @@
 
         .simple-toggle input:checked + .simple-toggle-slider:before {
             transform: translateX(22px);
+        }
+
+        /* ============================================================
+           KASIR DISCOUNT & SUMMARY COMPONENT (LIGHT & DARK ADAPTIVE)
+           ============================================================ */
+        .kasir-discount-box {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 0.75rem;
+            transition: all 0.2s ease;
+        }
+        .dark .kasir-discount-box {
+            background-color: #1e293b;
+            border-color: #334155;
+        }
+
+        .kasir-discount-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .kasir-discount-title {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #b45309;
+        }
+        .dark .kasir-discount-title {
+            color: #fbbf24;
+        }
+
+        .kasir-reset-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.125rem 0.5rem;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            color: #ef4444;
+            background-color: #fee2e2;
+            border-radius: 9999px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .kasir-reset-btn:hover {
+            background-color: #fecaca;
+            color: #b91c1c;
+        }
+        .dark .kasir-reset-btn {
+            background-color: #450a0a;
+            color: #fca5a5;
+        }
+        .dark .kasir-reset-btn:hover {
+            background-color: #7f1d1d;
+            color: #fecaca;
+        }
+
+        .kasir-input-group {
+            display: flex;
+            align-items: stretch;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            border: 1px solid #cbd5e1;
+            background-color: #ffffff;
+            transition: all 0.15s ease;
+        }
+        .dark .kasir-input-group {
+            border-color: #475569;
+            background-color: #0f172a;
+        }
+        .kasir-input-group:focus-within {
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+        }
+
+        .kasir-input-prefix {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 0.625rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            background-color: #f1f5f9;
+            color: #64748b;
+            border-right: 1px solid #cbd5e1;
+            user-select: none;
+        }
+        .dark .kasir-input-prefix {
+            background-color: #1e293b;
+            color: #94a3b8;
+            border-color: #475569;
+        }
+
+        .kasir-input-field {
+            flex: 1;
+            min-width: 0;
+            border: none !important;
+            background: transparent !important;
+            padding: 0.4rem 0.625rem !important;
+            font-size: 0.8125rem !important;
+            font-weight: 700 !important;
+            color: #0f172a !important;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        .dark .kasir-input-field {
+            color: #f8fafc !important;
+        }
+        .kasir-input-field::placeholder {
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .kasir-chip-list {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.375rem;
+            margin-top: 0.5rem;
+        }
+
+        .kasir-chip-btn {
+            padding: 0.2rem 0.5rem;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            border-radius: 0.375rem;
+            border: 1px solid #e2e8f0;
+            background-color: #ffffff;
+            color: #334155;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+        .kasir-chip-btn:hover {
+            background-color: #fef3c7;
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+        .dark .kasir-chip-btn {
+            border-color: #475569;
+            background-color: #0f172a;
+            color: #cbd5e1;
+        }
+        .dark .kasir-chip-btn:hover {
+            background-color: #78350f;
+            border-color: #f59e0b;
+            color: #fef3c7;
+        }
+
+        /* Modal Checkout Theme Adaptive */
+        .checkout-summary-box {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 0.875rem;
+        }
+        .dark .checkout-summary-box {
+            background-color: #18181b;
+            border-color: #27272a;
+        }
+
+        .checkout-summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8125rem;
+            color: #475569;
+        }
+        .dark .checkout-summary-row {
+            color: #94a3b8;
+        }
+
+        .checkout-summary-val {
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .dark .checkout-summary-val {
+            color: #f8fafc;
+        }
+
+        .checkout-summary-total {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding-top: 0.625rem;
+            margin-top: 0.5rem;
+            border-top: 1px dashed #cbd5e1;
+        }
+        .dark .checkout-summary-total {
+            border-top-color: #3f3f46;
+        }
+
+        .checkout-total-label {
+            font-size: 0.9375rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .dark .checkout-total-label {
+            color: #f8fafc;
+        }
+
+        .checkout-total-amount {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #d97706;
+        }
+        .dark .checkout-total-amount {
+            color: #fbbf24;
         }
     </style>
 
@@ -771,10 +1030,103 @@
                         @endforeach
                     </div>
 
-                    <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
-                        <div class="flex justify-between text-base font-medium text-gray-900 dark:text-white">
-                            <p>Total</p>
-                            <p>{{ 'Rp ' . number_format($this->cartTotal, 0, ',', '.') }}</p>
+                    <!-- Rincian Harga & Potongan Diskon -->
+                    <div class="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-2.5">
+                        <!-- Subtotal -->
+                        <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                            <span>Subtotal</span>
+                            <span class="font-semibold text-gray-900 dark:text-white">{{ 'Rp ' . number_format($this->cartSubtotal, 0, ',', '.') }}</span>
+                        </div>
+
+                        <!-- Card Potongan Harga / Diskon Manual -->
+                        <div class="kasir-discount-box">
+                            <div class="kasir-discount-header">
+                                <span class="kasir-discount-title">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                    </svg>
+                                    Potongan Harga
+                                </span>
+                                @if($discount > 0)
+                                    <button
+                                        type="button"
+                                        wire:click="resetDiscount"
+                                        class="kasir-reset-btn"
+                                        title="Hapus potongan harga"
+                                    >
+                                        <span>✕</span>
+                                        <span>Hapus</span>
+                                    </button>
+                                @endif
+                            </div>
+
+                            <!-- Input Potongan Harga -->
+                            <div class="kasir-input-group">
+                                <span class="kasir-input-prefix">Rp</span>
+                                <input
+                                    type="text"
+                                    id="cart_discount_input"
+                                    wire:model.live.debounce.400ms="manualDiscountInput"
+                                    placeholder="0"
+                                    class="kasir-input-field"
+                                    autocomplete="off"
+                                >
+                            </div>
+
+                            <!-- Quick Preset Buttons -->
+                            <div class="kasir-chip-list">
+                                <button
+                                    type="button"
+                                    wire:click="setDiscountPercentage(5)"
+                                    class="kasir-chip-btn"
+                                >
+                                    5%
+                                </button>
+                                <button
+                                    type="button"
+                                    wire:click="setDiscountPercentage(10)"
+                                    class="kasir-chip-btn"
+                                >
+                                    10%
+                                </button>
+                                <button
+                                    type="button"
+                                    wire:click="setDiscountAmount(5000)"
+                                    class="kasir-chip-btn"
+                                >
+                                    5.000
+                                </button>
+                                <button
+                                    type="button"
+                                    wire:click="setDiscountAmount(10000)"
+                                    class="kasir-chip-btn"
+                                >
+                                    10.000
+                                </button>
+                                <button
+                                    type="button"
+                                    wire:click="setDiscountAmount(20000)"
+                                    class="kasir-chip-btn"
+                                >
+                                    20.000
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Baris Potongan jika aktif -->
+                        @if($discount > 0)
+                            <div class="flex justify-between text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                                <span>Potongan Diskon</span>
+                                <span>- {{ 'Rp ' . number_format($this->discount, 0, ',', '.') }}</span>
+                            </div>
+                        @endif
+
+                        <!-- Total Pembayaran -->
+                        <div class="flex justify-between items-baseline pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <span class="text-base font-bold text-gray-900 dark:text-white">Total Bayar</span>
+                            <span class="text-xl font-extrabold text-amber-500 dark:text-amber-400">
+                                {{ 'Rp ' . number_format($this->cartTotal, 0, ',', '.') }}
+                            </span>
                         </div>
                     </div>
 
@@ -961,12 +1313,45 @@
                 <input type="hidden" id="selected_vendor_id" name="selected_vendor_id" value="">
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Total Pembayaran
-                </label>
-                <div class="mt-1 text-lg font-bold text-gray-900 dark:text-white">
-                    {{ 'Rp ' . number_format($this->cartTotal, 0, ',', '.') }}
+            <!-- Rincian Pembayaran & Diskon di Modal -->
+            <div class="checkout-summary-box space-y-2.5">
+                <div class="checkout-summary-row">
+                    <span>Subtotal Belanja</span>
+                    <span class="checkout-summary-val" id="modal_subtotal_display">
+                        {{ 'Rp ' . number_format($this->cartSubtotal, 0, ',', '.') }}
+                    </span>
+                </div>
+
+                <div class="checkout-summary-row">
+                    <label for="modal_discount_input" class="font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                        Potongan Diskon
+                    </label>
+                    <div class="kasir-input-group" style="max-width: 160px;">
+                        <span class="kasir-input-prefix">Rp</span>
+                        <input
+                            type="text"
+                            id="modal_discount_input"
+                            x-on:input="handleModalDiscountChange($event)"
+                            value="{{ $this->discount > 0 ? number_format($this->discount, 0, ',', '.') : '' }}"
+                            placeholder="0"
+                            class="kasir-input-field text-right"
+                        >
+                    </div>
+                </div>
+
+                <div class="checkout-summary-row text-amber-600 dark:text-amber-400 font-semibold {{ $this->discount > 0 ? '' : 'hidden' }}" id="modal_discount_row">
+                    <span>Potongan Terpasang</span>
+                    <span id="modal_discount_display">- {{ 'Rp ' . number_format($this->discount, 0, ',', '.') }}</span>
+                </div>
+
+                <div class="checkout-summary-total">
+                    <span class="checkout-total-label">Total Pembayaran</span>
+                    <span class="checkout-total-amount" id="modal_total_display">
+                        {{ 'Rp ' . number_format($this->cartTotal, 0, ',', '.') }}
+                    </span>
                 </div>
             </div>
 

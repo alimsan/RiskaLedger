@@ -198,6 +198,16 @@
                         @endforeach
                     </tbody>
                     <tfoot>
+                        @if(isset($discount) && $discount > 0)
+                        <tr class="border-t text-sm">
+                            <td colspan="3" class="p-2 text-right text-gray-600">Sub Total</td>
+                            <td class="p-2 text-right text-gray-600">{{ number_format($subtotal ?? ($total + $discount), 0, ',', '.') }}</td>
+                        </tr>
+                        <tr class="border-t text-sm text-amber-600 font-semibold">
+                            <td colspan="3" class="p-2 text-right">Potongan Harga</td>
+                            <td class="p-2 text-right">-{{ number_format($discount, 0, ',', '.') }}</td>
+                        </tr>
+                        @endif
                         <tr class="border-t">
                             <td colspan="3" class="p-2 text-right font-bold">Total</td>
                             <td class="p-2 text-right font-bold">{{ number_format($total, 0, ',', '.') }}</td>
@@ -379,6 +389,10 @@
                 @endforeach
 
                 receipt += line() + '\n';
+                @if(isset($discount) && $discount > 0)
+                receipt += leftRight('Subtotal:', formatMoney({{ $subtotal ?? ($total + $discount) }})) + '\n';
+                receipt += leftRight('Potongan:', '-' + formatMoney({{ $discount }})) + '\n';
+                @endif
                 receipt += leftRight('TOTAL:', formatMoney({{ $total }})) + '\n';
                 receipt += line() + '\n';
 

@@ -14,6 +14,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Str;
+use Filament\Support\RawJs;
 
 class ItemResource extends Resource
 {
@@ -68,8 +69,12 @@ class ItemResource extends Resource
             Forms\Components\TextInput::make('price')
                 ->label('Harga')
                 ->required()
+                ->prefix('Rp')
+                ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
+                ->stripCharacters('.')
                 ->numeric()
-                ->prefix('Rp'),
+                ->formatStateUsing(fn ($state) => filled($state) ? number_format((float) $state, 0, '', '.') : '')
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? (float) str_replace('.', '', (string) $state) : 0),
             Forms\Components\TextInput::make('stock')
                 ->label('Stok')
                 ->numeric()

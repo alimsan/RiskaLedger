@@ -10,6 +10,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Filament\Support\RawJs;
 
 class CreateItem extends CreateRecord
 {
@@ -70,7 +71,11 @@ class CreateItem extends CreateRecord
                                     ->label('Harga')
                                     ->prefix('Rp')
                                     ->required()
+                                    ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
+                                    ->stripCharacters('.')
                                     ->numeric()
+                                    ->formatStateUsing(fn ($state) => filled($state) ? number_format((float) $state, 0, '', '.') : '')
+                                    ->dehydrateStateUsing(fn ($state) => filled($state) ? (float) str_replace('.', '', (string) $state) : 0)
                                     ->columnSpan(['default' => 12, 'md' => 3]),
 
                                 Forms\Components\TextInput::make('stock')
@@ -136,6 +141,9 @@ class CreateItem extends CreateRecord
                     continue;
                 }
                 $itemData['tenant_id'] = $tenantId;
+                if (isset($itemData['price'])) {
+                    $itemData['price'] = (float) str_replace('.', '', (string) $itemData['price']);
+                }
                 $createdRecords[] = Item::create($itemData);
             }
         });

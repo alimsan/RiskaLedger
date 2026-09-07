@@ -31,11 +31,15 @@ class KasirPage extends Page
     public $cartItems = [];
     public $searchQuery = '';
     public $selectedCategory = '';
+    public $discount = 0;
+    public $manualDiscountInput = '';
 
     public function mount()
     {
-        // Inisialisasi keranjang dari session jika ada
+        // Inisialisasi keranjang dan diskon dari session jika ada
         $this->cartItems = session('cart_items', []);
+        $this->discount = (float) session('cart_discount', 0);
+        $this->manualDiscountInput = $this->discount > 0 ? number_format($this->discount, 0, ',', '.') : '';
     }
 
     #[Computed]
@@ -252,6 +256,14 @@ class KasirPage extends Page
 
         // Simpan keranjang ke session
         session(['cart_items' => $this->cartItems]);
+
+        // Sesuaikan diskon jika melebihi subtotal baru
+        $subtotal = $this->cartSubtotal();
+        if (empty($this->cartItems)) {
+            $this->resetDiscount();
+        } elseif ($this->discount > $subtotal) {
+            $this->setDiscountAmount($subtotal);
+        }
     }
 
     public function removeFromCart($itemId)
@@ -260,6 +272,14 @@ class KasirPage extends Page
 
         // Simpan keranjang ke session
         session(['cart_items' => $this->cartItems]);
+
+        // Sesuaikan diskon jika melebihi subtotal baru
+        $subtotal = $this->cartSubtotal();
+        if (empty($this->cartItems)) {
+            $this->resetDiscount();
+        } elseif ($this->discount > $subtotal) {
+            $this->setDiscountAmount($subtotal);
+        }
 
         // Beri notifikasi
         Notification::make()
@@ -271,9 +291,12 @@ class KasirPage extends Page
     public function clearCart()
     {
         $this->cartItems = [];
+        $this->discount = 0;
+        $this->manualDiscountInput = '';
 
-        // Hapus keranjang dari session
+        // Hapus keranjang dan diskon dari session
         session()->forget('cart_items');
+        session()->forget('cart_discount');
 
         // Beri notifikasi
         Notification::make()
@@ -283,15 +306,76 @@ class KasirPage extends Page
     }
 
     #[Computed]
-    public function cartTotal()
+    public function cartSubtotal()
     {
-        $total = 0;
+        $subtotal = 0;
 
         foreach ($this->cartItems as $item) {
-            $total += $item['price'] * $item['quantity'];
+            $subtotal += $item['price'] * $item['quantity'];
         }
 
-        return $total;
+        return $subtotal;
+    }
+
+    #[Computed]
+    public function cartTotal()
+    {
+        $subtotal = $this->cartSubtotal();
+        $discount = (float) $this->discount;
+
+        return max(0, $subtotal - $discount);
+    }
+
+    /**
+     * Update diskon saat operator mengetik di form input manual
+     */
+    public function updatedManualDiscountInput($value)
+    {
+        $clean = preg_replace('/[^0-9]/', '', (string) $value);
+        $num = (float) ($clean ?: 0);
+        $subtotal = $this->cartSubtotal();
+
+        if ($num > $subtotal) {
+            $num = $subtotal;
+        }
+
+        $this->discount = $num;
+        $this->manualDiscountInput = $num > 0 ? number_format($num, 0, ',', '.') : '';
+        session(['cart_discount' => $this->discount]);
+    }
+
+    /**
+     * Set nominal potongan harga (Rp)
+     */
+    public function setDiscountAmount($amount)
+    {
+        $subtotal = $this->cartSubtotal();
+        $amount = (float) $amount;
+        $this->discount = max(0, min($subtotal, $amount));
+        $this->manualDiscountInput = $this->discount > 0 ? number_format($this->discount, 0, ',', '.') : '';
+        session(['cart_discount' => $this->discount]);
+    }
+
+    /**
+     * Set persentase potongan harga (%)
+     */
+    public function setDiscountPercentage($percent)
+    {
+        $subtotal = $this->cartSubtotal();
+        $calculated = round(($subtotal * (float) $percent) / 100);
+        $this->discount = max(0, min($subtotal, $calculated));
+        $this->manualDiscountInput = $this->discount > 0 ? number_format($this->discount, 0, ',', '.') : '';
+        session(['cart_discount' => $this->discount]);
+    }
+
+    /**
+     * Hapus potongan harga / reset ke 0
+     */
+    public function resetDiscount()
+    {
+        $this->discount = 0;
+        $this->manualDiscountInput = '';
+        session()->forget('cart_discount');
     }
 
     #[Computed]
@@ -350,7 +434,12 @@ class KasirPage extends Page
         try {
             $user = auth()->user();
             $tenantId = $user->tenant_id;
-            $total = $this->cartTotal();
+            $subtotal = $this->cartSubtotal();
+
+            // Diskon yang diterapkan (dari payload checkout atau dari state)
+            $discount = isset($data['discount']) ? (float) $data['discount'] : (float) $this->discount;
+            $discount = max(0, min($subtotal, $discount));
+            $total = max(0, $subtotal - $discount);
 
             // Set waktu transaksi (gunakan custom time jika ada, atau waktu sekarang jika tidak)
             $transactionTime = !empty($data['transaction_time'])
@@ -419,10 +508,13 @@ class KasirPage extends Page
                 $transaction->type_id = $data['type_id'];
                 $transaction->nama_barang = 'Penjualan Kasir';
                 $transaction->deksripsi = implode(', ', $itemsDetails);
-                $transaction->keterangan = $data['notes'] ?? '';
 
-                // Tambahkan informasi pembeli dan kasir jika disertakan
+                // Tambahkan informasi diskon, pembeli, kasir, dan catatan
                 $additionalInfo = [];
+
+                if ($discount > 0) {
+                    $additionalInfo[] = 'Potongan Harga: Rp ' . number_format($discount, 0, ',', '.') . ' (Subtotal: Rp ' . number_format($subtotal, 0, ',', '.') . ')';
+                }
 
                 if (isset($data['buyer_name']) && $data['buyer_name']) {
                     $additionalInfo[] = 'Pembeli: ' . $data['buyer_name'];
@@ -432,13 +524,12 @@ class KasirPage extends Page
                     $additionalInfo[] = 'Kasir: ' . $data['cashier_name'];
                 }
 
-                if (!empty($additionalInfo)) {
-                    $infoString = implode("\n", $additionalInfo);
-                    $transaction->keterangan = $transaction->keterangan
-                        ? $transaction->keterangan . "\n" . $infoString
-                        : $infoString;
+                $userNotes = trim($data['notes'] ?? '');
+                if ($userNotes) {
+                    $additionalInfo[] = 'Catatan: ' . $userNotes;
                 }
 
+                $transaction->keterangan = implode("\n", $additionalInfo);
                 $transaction->nilai = $total;
                 $transaction->waktu = $transactionTime;
                 $transaction->save();
@@ -474,9 +565,6 @@ class KasirPage extends Page
                     ->success()
                     ->send();
             }
-
-            // Commit transaksi
-            DB::commit();
 
             // Commit transaksi
             DB::commit();
@@ -556,11 +644,11 @@ class KasirPage extends Page
      * @param string|null $transactionTime
      * @return array
      */
-    public function saveCartForPrinting($typeId = null, $isPiutang = false, $vendorId = null, $notes = null, $buyerName = null, $cashierName = null, $transactionTime = null)
+    public function saveCartForPrinting($typeId = null, $isPiutang = false, $vendorId = null, $notes = null, $buyerName = null, $cashierName = null, $transactionTime = null, $discount = null)
     {
         // Format data items
         $items = [];
-        $total = 0;
+        $subtotal = 0;
         
         foreach ($this->cartItems as $item) {
             $items[] = [
@@ -569,8 +657,12 @@ class KasirPage extends Page
                 'price' => $item['price']
             ];
             
-            $total += $item['price'] * $item['quantity'];
+            $subtotal += $item['price'] * $item['quantity'];
         }
+
+        $appliedDiscount = $discount !== null ? (float) $discount : (float) $this->discount;
+        $appliedDiscount = max(0, min($subtotal, $appliedDiscount));
+        $total = max(0, $subtotal - $appliedDiscount);
         
         // Ambil nama metode pembayaran jika $typeId disediakan
         $paymentMethod = 'Tunai';
@@ -604,6 +696,8 @@ class KasirPage extends Page
         // Simpan data ke session
         session([
             'print_items' => $items,
+            'print_subtotal' => $subtotal,
+            'print_discount' => $appliedDiscount,
             'print_total' => $total,
             'print_transaction_id' => 'TRX' . now()->format('YmdHis'),
             'print_transaction_date' => $formattedDate,
