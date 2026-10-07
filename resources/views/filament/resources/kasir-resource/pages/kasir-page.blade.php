@@ -820,6 +820,64 @@
         .dark .checkout-total-amount {
             color: #fbbf24;
         }
+
+        /* Style untuk Tombol Print Struk Thermal (Adaptive Light & Dark) */
+        #print_thermal_btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 0.625rem 1rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            line-height: 1.25rem;
+            border-radius: 0.5rem;
+            color: #ffffff !important;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            border: 1px solid #b45309;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        #print_thermal_btn:hover {
+            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            border-color: #92400e;
+            box-shadow: 0 4px 6px -1px rgba(180, 83, 9, 0.25), 0 2px 4px -2px rgba(180, 83, 9, 0.25);
+            transform: translateY(-1px);
+        }
+
+        #print_thermal_btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        #print_thermal_btn:focus {
+            outline: 2px solid #f59e0b;
+            outline-offset: 2px;
+        }
+
+        .dark #print_thermal_btn {
+            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            border-color: #f59e0b;
+            box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .dark #print_thermal_btn:hover {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            border-color: #fbbf24;
+            box-shadow: 0 4px 10px 0 rgba(245, 158, 11, 0.35);
+        }
+
+        #print_thermal_btn svg {
+            color: #ffffff;
+            stroke: currentColor;
+            margin-right: 0.5rem;
+            width: 1.25rem;
+            height: 1.25rem;
+            flex-shrink: 0;
+        }
     </style>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1207,7 +1265,7 @@
             </div>
 
             <div class="py-2 border-b border-gray-200 dark:border-gray-700">
-                <button type="button" id="print_thermal_btn" class="w-full flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
+                <button type="button" id="print_thermal_btn" class="w-full flex items-center justify-center py-2.5 px-4 rounded-lg font-medium text-sm text-white focus:outline-none">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                     </svg>
